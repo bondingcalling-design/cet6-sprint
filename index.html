@@ -580,9 +580,15 @@ const appApi = { toggleDisguise: () => {}, lookup: () => {} };
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); appApi.toggleDisguise(); }
 });
-// 右键(桌面)取词查释义
+// 取词:优先用已选中的文本(支持词组),否则取点击处的单词
+function termAt(x, y) {
+  const sel = (window.getSelection ? String(window.getSelection()) : '').trim();
+  if (sel && sel.length >= 2 && sel.length <= 48 && /[A-Za-z]/.test(sel)) return sel;
+  return wordAtPoint(x, y);
+}
+// 右键(桌面)取词/取词组查释义并可收藏
 document.addEventListener('contextmenu', (e) => {
-  const w = wordAtPoint(e.clientX, e.clientY);
+  const w = termAt(e.clientX, e.clientY);
   if (w) { e.preventDefault(); appApi.lookup(w, e.clientX, e.clientY); }
 });
 // 长按(移动端)取词查释义
@@ -591,7 +597,7 @@ document.addEventListener('touchstart', (e) => {
   if (e.touches.length !== 1) return;
   const t = e.touches[0]; _lpX = t.clientX; _lpY = t.clientY;
   _lpTimer = setTimeout(() => {
-    const w = wordAtPoint(_lpX, _lpY);
+    const w = termAt(_lpX, _lpY);
     if (w) appApi.lookup(w, _lpX, _lpY);
   }, 500);
 }, { passive: true });
@@ -617,6 +623,8 @@ function App() {
 
   // —— 翻译速拼
   const [tIndex, setTIndex] = useState(0);
+  const [tHist, setTHist] = useState([0]);          // 本次做题历史(题号序列)
+  const [tHp, setTHp] = useState(0);                // 历史指针
   const [tShuffle, setTShuffle] = useState(() => makeShuffle(0));
   const [tPicked, setTPicked] = useState([]);       // 存 tShuffle 下标
   const [tShowWrong, setTShowWrong] = useState(false);
@@ -624,6 +632,8 @@ function App() {
 
   // —— 句式点亮
   const [pIndex, setPIndex] = useState(0);
+  const [pHist, setPHist] = useState([0]);
+  const [pHp, setPHp] = useState(0);
   const [pLit, setPLit] = useState(() => Array(PATTERNS.length).fill(false));
   const [pChosen, setPChosen] = useState(null);
 
@@ -640,21 +650,28 @@ function App() {
 
   // —— 固定搭配
   const [colIndex, setColIndex] = useState(0);
+  const [colHist, setColHist] = useState([0]);
+  const [colHp, setColHp] = useState(0);
   const [colChosen, setColChosen] = useState(null);
 
   // —— 作文模板(默写检查)
   const [tmplIdx, setTmplIdx] = useState(0);
+  const [tmplHist, setTmplHist] = useState([0]);
+  const [tmplHp, setTmplHp] = useState(0);
   const [tmplInput, setTmplInput] = useState('');
   const [tmplChecked, setTmplChecked] = useState(false);
   const [tmplDone, setTmplDone] = useState(() => Array(ESSAY_TEMPLATES.length).fill(false));
 
   // —— 作文构思(自己输入思路 → 对照范例)
   const [oIndex, setOIndex] = useState(0);
+  const [oHist, setOHist] = useState([0]);
+  const [oHp, setOHp] = useState(0);
   const [oInput, setOInput] = useState('');
   const [oRevealed, setORevealed] = useState(false);
 
-  // —— 收藏(localStorage 持久化)
+  // —— 收藏(localStorage 持久化):favs=题目收藏, wordFavs=单词/词组收藏
   const [favs, setFavs] = useState(() => { try { return JSON.parse(localStorage.getItem('cet6_favs') || '[]'); } catch (e) { return []; } });
+  const [wordFavs, setWordFavs] = useState(() => { try { return JSON.parse(localStorage.getItem('cet6_wordfavs') || '[]'); } catch (e) { return []; } });
 
   // —— 查词弹窗
   const [dictWord, setDictWord] = useState(null);
@@ -677,16 +694,20 @@ function App() {
       .catch(() => setDictData('error'));
   };
 
-  // 收藏:切换 + 跳转
+  // 收藏:题目切换 + 单词/词组切换 + 跳转
   function toggleFav(id) {
     setFavs(f => { const n = f.includes(id) ? f.filter(x => x !== id) : [...f, id]; try { localStorage.setItem('cet6_favs', JSON.stringify(n)); } catch (e) {} return n; });
   }
+  function toggleWordFav(term) {
+    const t = term.trim(); if (!t) return;
+    setWordFavs(f => { const n = f.includes(t) ? f.filter(x => x !== t) : [...f, t]; try { localStorage.setItem('cet6_wordfavs', JSON.stringify(n)); } catch (e) {} return n; });
+  }
   function gotoFav(mode, idx) {
-    if (mode === 'translate') { setTIndex(idx); setTPicked([]); setTShowWrong(false); setTShuffle(makeShuffle(idx)); }
-    else if (mode === 'pattern') { setPIndex(idx); setPChosen(null); }
-    else if (mode === 'collocation') { setColIndex(idx); setColChosen(null); }
-    else if (mode === 'templates') { setTmplIdx(idx); setTmplInput(''); setTmplChecked(false); }
-    else if (mode === 'outline') { setOIndex(idx); setOInput(''); setORevealed(false); }
+    if (mode === 'translate') { setTIndex(idx); setTHist([idx]); setTHp(0); setTPicked([]); setTShowWrong(false); setTRight(false); setTShuffle(makeShuffle(idx)); }
+    else if (mode === 'pattern') { setPIndex(idx); setPHist([idx]); setPHp(0); setPChosen(null); }
+    else if (mode === 'collocation') { setColIndex(idx); setColHist([idx]); setColHp(0); setColChosen(null); }
+    else if (mode === 'templates') { setTmplIdx(idx); setTmplHist([idx]); setTmplHp(0); setTmplInput(''); setTmplChecked(false); }
+    else if (mode === 'outline') { setOIndex(idx); setOHist([idx]); setOHp(0); setOInput(''); setORevealed(false); }
     setScreen(mode);
   }
   function enterFavorites() { setScreen('favorites'); }
@@ -715,21 +736,21 @@ function App() {
   }
 
   /* —— 进入各模式 —— */
+  function tLoad(ni) { setTIndex(ni); setTShuffle(makeShuffle(ni)); setTPicked([]); setTShowWrong(false); setTRight(false); }
   function enterTranslate() {
     const ni = rnd(TRANSLATIONS.length);
-    setScreen('translate'); setTIndex(ni);
-    setTPicked([]); setTShowWrong(false); setTRight(false);
-    setTShuffle(makeShuffle(ni));
+    setScreen('translate'); setTHist([ni]); setTHp(0); tLoad(ni);
   }
-  function enterPattern() { setScreen('pattern'); setPIndex(rnd(PATTERNS.length)); setPChosen(null); }
+  function prevSentence() { if (tHp > 0) { setTHp(tHp - 1); tLoad(tHist[tHp - 1]); } }
+  function enterPattern() { const ni = rnd(PATTERNS.length); setScreen('pattern'); setPHist([ni]); setPHp(0); setPIndex(ni); setPChosen(null); }
+  function prevPattern() { if (pHp > 0) { setPHp(pHp - 1); setPIndex(pHist[pHp - 1]); setPChosen(null); } }
   function enterSynonym() { setScreen('synonym'); newBatch(rnd(SYNONYM_BATCHES.length)); }
 
   /* —— 翻译逻辑(按单词文本判对 → 两个相同的词换序也算对) —— */
   const tCur = TRANSLATIONS[tIndex];
   function nextSentence() {
-    const ni = rnd(TRANSLATIONS.length, tIndex);
-    setTIndex(ni); setTShuffle(makeShuffle(ni));
-    setTPicked([]); setTShowWrong(false); setTRight(false);
+    const r = histForward(tHist, tHp, TRANSLATIONS.length);
+    setTHist(r.hist); setTHp(r.hp); tLoad(r.idx);
   }
   function retryTranslate() { setTShowWrong(false); setTPicked([]); }
   function pickBlock(pos) {
@@ -739,7 +760,7 @@ function App() {
     if (np.length === tCur.tokens.length) {
       // 关键:逐位比较单词文本,而非原始下标 —— 重复词不区分顺序
       const ok = np.every((p, idx) => tShuffle[p].w === tCur.tokens[idx]);
-      if (ok) { correctFlow(); setTRight(true); setTimeout(nextSentence, 2300); }  // 答对停留巩固
+      if (ok) { correctFlow(); setTRight(true); }  // 答对:展示考点,等用户点“下一句”
       else { wrongFlow(); setTShowWrong(true); }   // 不自动消失,留给用户看解释
     }
   }
@@ -750,16 +771,18 @@ function App() {
 
   /* —— 句式逻辑 —— */
   const pCur = PATTERNS[pIndex];
-  function nextPattern() { setPIndex(p => rnd(PATTERNS.length, p)); setPChosen(null); }
+  function nextPattern() {
+    const r = histForward(pHist, pHp, PATTERNS.length);
+    setPHist(r.hist); setPHp(r.hp); setPIndex(r.idx); setPChosen(null);
+  }
   function chooseOption(opt) {
     if (pChosen) return;
     setPChosen(opt);
     if (opt === pCur.answer) {
       setPLit(arr => { const n = arr.slice(); n[pIndex] = true; return n; });
-      correctFlow();
-      setTimeout(() => { setPChosen(null); nextPattern(); }, 2300);   // 答对停留巩固
+      correctFlow();   // 答对:展示讲解,等用户点“继续”
     } else {
-      wrongFlow();   // 答错:停下展示解释,等用户点“继续”
+      wrongFlow();
     }
   }
 
@@ -797,19 +820,24 @@ function App() {
   }
 
   /* —— 固定搭配逻辑 —— */
-  function enterCollocation() { setScreen('collocation'); setColIndex(rnd(COLLOCATIONS.length)); setColChosen(null); }
+  function enterCollocation() { const ni = rnd(COLLOCATIONS.length); setScreen('collocation'); setColHist([ni]); setColHp(0); setColIndex(ni); setColChosen(null); }
+  function prevCol() { if (colHp > 0) { setColHp(colHp - 1); setColIndex(colHist[colHp - 1]); setColChosen(null); } }
   const colCur = COLLOCATIONS[colIndex];
-  function colNext() { setColIndex(i => rnd(COLLOCATIONS.length, i)); setColChosen(null); }
+  function colNext() {
+    const r = histForward(colHist, colHp, COLLOCATIONS.length);
+    setColHist(r.hist); setColHp(r.hp); setColIndex(r.idx); setColChosen(null);
+  }
   function colChoose(opt) {
     if (colChosen) return;
     setColChosen(opt);
-    if (opt === colCur.answer) { correctFlow(); setTimeout(() => { setColChosen(null); colNext(); }, 2300); }  // 答对停留巩固
-    else { wrongFlow(); }   // 答错:展示正确搭配+释义,手动继续
+    if (opt === colCur.answer) { correctFlow(); }  // 答对:展示搭配+释义,等用户点“继续”
+    else { wrongFlow(); }
   }
 
   /* —— 作文模板逻辑(默写检查) —— */
-  function enterTemplates() { setScreen('templates'); setTmplIdx(rnd(ESSAY_TEMPLATES.length)); setTmplInput(''); setTmplChecked(false); }
-  function tmplGoNext() { setTmplIdx(i => rnd(ESSAY_TEMPLATES.length, i)); setTmplInput(''); setTmplChecked(false); }
+  function enterTemplates() { const ni = rnd(ESSAY_TEMPLATES.length); setScreen('templates'); setTmplHist([ni]); setTmplHp(0); setTmplIdx(ni); setTmplInput(''); setTmplChecked(false); }
+  function tmplGoNext() { const r = histForward(tmplHist, tmplHp, ESSAY_TEMPLATES.length); setTmplHist(r.hist); setTmplHp(r.hp); setTmplIdx(r.idx); setTmplInput(''); setTmplChecked(false); }
+  function tmplPrev() { if (tmplHp > 0) { setTmplHp(tmplHp - 1); setTmplIdx(tmplHist[tmplHp - 1]); setTmplInput(''); setTmplChecked(false); } }
   function tmplCheck() {
     if (!tmplInput.trim()) return;
     setTmplChecked(true);
@@ -824,9 +852,10 @@ function App() {
   }
 
   /* —— 作文构思逻辑(自己写思路 → 对照范例骨架) —— */
-  function enterOutline() { setScreen('outline'); setOIndex(rnd(ESSAY_OUTLINES.length)); setOInput(''); setORevealed(false); }
+  function enterOutline() { const ni = rnd(ESSAY_OUTLINES.length); setScreen('outline'); setOHist([ni]); setOHp(0); setOIndex(ni); setOInput(''); setORevealed(false); }
+  function oPrev() { if (oHp > 0) { setOHp(oHp - 1); setOIndex(oHist[oHp - 1]); setOInput(''); setORevealed(false); } }
   const oCur = ESSAY_OUTLINES[oIndex];
-  function oNext() { setOIndex(i => rnd(ESSAY_OUTLINES.length, i)); setOInput(''); setORevealed(false); }
+  function oNext() { const r = histForward(oHist, oHp, ESSAY_OUTLINES.length); setOHist(r.hist); setOHp(r.hp); setOIndex(r.idx); setOInput(''); setORevealed(false); }
   function oReveal() { if (oRevealed) return; setORevealed(true); correctFlow(); }
   function oRetry() { setORevealed(false); setOInput(''); }
 
@@ -841,18 +870,18 @@ function App() {
       fx === 'correct' && ParticleBurst({ combo }),
       comboMsg && ComboBanner({ comboMsg }),
       combo >= 5 && EdgeGlow({ strong: combo >= 10 }),
-      dictWord && WordPopup({ dictWord, dictPos, dictData, close: () => setDictWord(null) })
+      dictWord && WordPopup({ dictWord, dictPos, dictData, close: () => setDictWord(null), isWordFav: wordFavs.includes(dictWord), onToggleWordFav: () => toggleWordFav(dictWord) })
     ),
     // 屏幕层:key 随模式变化 → 仅切换模式时重建(播放入场动画),屏幕内操作只做增量更新
     h('div', { key: 'screen-' + screen },
-      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs }),
-      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }),
-      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav }),
+      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs, wordFavs }),
+      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, pos: tHp + 1, onPrev: prevSentence, canPrev: tHp > 0 }),
+      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, pos: pHp + 1, onPrev: prevPattern, canPrev: pHp > 0 }),
       screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
-      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav }),
-      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav }),
-      screen === 'outline' && Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav }),
-      screen === 'favorites' && Favorites({ favs, toggleFav, gotoFav, setScreen })
+      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, pos: colHp + 1, onPrev: prevCol, canPrev: colHp > 0 }),
+      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, pos: tmplHp + 1, onPrev: tmplPrev, canPrev: tmplHp > 0 }),
+      screen === 'outline' && Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, pos: oHp + 1, onPrev: oPrev, canPrev: oHp > 0 }),
+      screen === 'favorites' && Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen })
     )
   );
 }
@@ -865,6 +894,12 @@ function rnd(n, not) {
   if (n <= 1) return 0;
   let i; do { i = Math.floor(Math.random() * n); } while (i === not);
   return i;
+}
+// 历史前进:若已回看过有前进记录则沿用,否则随机一道新题(避开当前)
+function histForward(hist, hp, N) {
+  if (hp < hist.length - 1) return { idx: hist[hp + 1], hist: hist, hp: hp + 1 };
+  const idx = rnd(N, hist[hp]);
+  return { idx: idx, hist: hist.concat([idx]), hp: hp + 1 };
 }
 function shuffleOutline(i) {
   return shuffle(ESSAY_OUTLINES[i].steps.map((w, oi) => ({ w, oi })));
@@ -945,7 +980,7 @@ function Header({ todayCount, combo }) {
 /* ============================================================
    主菜单
    ============================================================ */
-function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs }) {
+function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs, wordFavs }) {
   const litCount = pLit.filter(Boolean).length;
   const tmplCount = tmplDone.filter(Boolean).length;
   const cards = [
@@ -955,7 +990,7 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
     { icon: '💡', title: '句式点亮', desc: '作文高级句式 · 点亮句库', accent: '#0ea5e9', onClick: enterPattern, badge: `${litCount}/${PATTERNS.length} 已点亮` },
     { icon: '📝', title: '作文模板', desc: '万能句式 · 默写检查', accent: '#8b5cf6', onClick: enterTemplates, badge: `已背 ${tmplCount}/${ESSAY_TEMPLATES.length}` },
     { icon: '🏗️', title: '作文构思', desc: '自己列思路 · 对照范例骨架', accent: '#ef4444', onClick: enterOutline, badge: `${ESSAY_OUTLINES.length} 题` },
-    { icon: '⭐', title: '我的收藏', desc: '收藏的题目 · 集中复习', accent: '#eab308', onClick: enterFavorites, badge: `${favs.length} 条` },
+    { icon: '⭐', title: '我的收藏', desc: '收藏题目 + 生词本 · 集中复习', accent: '#eab308', onClick: enterFavorites, badge: `${favs.length} 题 · ${wordFavs.length} 词` },
   ];
   return h('div', { style: { animation: 'riseIn .4s ease-out' } },
     h('div', { style: { textAlign: 'center', margin: '6px 0 26px' } },
@@ -1002,12 +1037,12 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
 /* ============================================================
    模式①:翻译速拼
    ============================================================ */
-function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }) {
+function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, pos, onPrev, canPrev }) {
   const pickedSet = new Set(tPicked);
   // 第一个语序错误位置:按单词文本比较(相同的词换序不算错)
   const firstWrong = tShowWrong ? tPicked.findIndex((p, idx) => tShuffle[p].w !== tCur.tokens[idx]) : -1;
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '翻译速拼', sub: `第 ${tIndex + 1} / ${TRANSLATIONS.length}`, setScreen, favId: 'translate#' + tIndex, fav }),
+    SubBar({ title: '翻译速拼', sub: `本次第 ${pos} 题`, setScreen, favId: 'translate#' + tIndex, fav, onPrev, canPrev }),
     h('div', { style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '16px', boxShadow: SHADOW } },
       h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '8px' } }, '中文'),
       h('div', { style: { fontSize: '20px', lineHeight: 1.7, color: INK, fontWeight: '600' } }, tCur.zh)
@@ -1039,7 +1074,8 @@ function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBl
       h('div', { style: { fontSize: '14px', color: GREEN, fontWeight: '800', marginBottom: '8px' } }, '✓ 正确!巩固一下考点'),
       h('div', { style: { fontSize: '15px', color: INK, lineHeight: 1.6, fontWeight: '700', marginBottom: '8px' } }, tCur.tokens.join(' ')),
       h('div', { style: { fontSize: '13px', color: INK, lineHeight: 1.7, padding: '10px 12px',
-          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + tCur.why)
+          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + tCur.why),
+      h('button', { onClick: nextSentence, style: { ...smallBtn(true), marginTop: '12px', width: '100%' } }, '下一句 →')
     ),
     // 答错解释面板
     tShowWrong && h('div', { key: 'twrong', style: {
@@ -1074,12 +1110,12 @@ function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBl
 /* ============================================================
    模式②:句式点亮
    ============================================================ */
-function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav }) {
+function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, pos, onPrev, canPrev }) {
   const correct = pChosen && pChosen === pCur.answer;
   const wrong = pChosen && pChosen !== pCur.answer;
   const litExamples = PATTERNS.filter((_, i) => pLit[i]);
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '句式点亮', sub: `${pLit.filter(Boolean).length} / ${PATTERNS.length} 已点亮`, setScreen, favId: 'pattern#' + pIndex, fav }),
+    SubBar({ title: '句式点亮', sub: `本次第 ${pos} 题 · 已点亮 ${pLit.filter(Boolean).length}/${PATTERNS.length}`, setScreen, favId: 'pattern#' + pIndex, fav, onPrev, canPrev }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '14px', boxShadow: SHADOW } },
       h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '10px', letterSpacing: '1px' } }, pCur.name),
@@ -1117,7 +1153,8 @@ function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setSc
       h('div', { style: { fontSize: '14px', color: GREEN, fontWeight: '800', marginBottom: '8px' } }, '✓ 正确!巩固一下'),
       h('div', { style: { fontSize: '14px', color: INK, lineHeight: 1.6, fontWeight: '700', marginBottom: '8px' } }, pCur.full),
       h('div', { style: { fontSize: '13px', color: INK, lineHeight: 1.7, padding: '10px 12px',
-          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + pCur.why)
+          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + pCur.why),
+      h('button', { onClick: nextPattern, style: { ...smallBtn(true), marginTop: '12px', width: '100%' } }, '继续 →')
     ),
     // 答错解释面板
     wrong && h('div', { key: 'pwrong', style: {
@@ -1154,7 +1191,7 @@ function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setSc
 function Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }) {
   const rotations = [-4, 3, -2, 5, -5, 2, 4, -3];
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '同义替换', sub: `第 ${sBatch + 1} / ${SYNONYM_BATCHES.length} 批`, setScreen }),
+    SubBar({ title: '同义替换', sub: `随机一批 · 4 对配对消除`, setScreen }),
     h('div', { style: { fontSize: '13px', color: MUTED, textAlign: 'center', marginBottom: '14px' } },
       '点击两个同义词配对 · 4 对全消即过关'),
     // 答错提示
@@ -1233,12 +1270,19 @@ function smallBtn(primary) {
 /* ============================================================
    子页头(标题 + 返回)
    ============================================================ */
-function SubBar({ title, sub, setScreen, favId, fav }) {
+function SubBar({ title, sub, setScreen, favId, fav, onPrev, canPrev }) {
   const isFav = fav && favId && fav.favs.includes(favId);
-  return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 18px' } },
+  return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '4px 0 18px' } },
     h('div', null,
       h('div', { style: { fontSize: '22px', fontWeight: '900', color: DEEP } }, title),
-      h('div', { style: { fontSize: '12px', color: MUTED, marginTop: '3px' } }, sub)
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' } },
+        h('span', { style: { fontSize: '12px', color: MUTED } }, sub),
+        onPrev && h('button', { onClick: () => canPrev && onPrev(),
+          style: { padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
+            border: '1px solid ' + (canPrev ? 'rgba(124,58,237,0.4)' : 'rgba(139,127,176,0.25)'),
+            background: canPrev ? 'rgba(124,58,237,0.08)' : 'transparent',
+            color: canPrev ? PURPLE : '#c9bce6' } }, '‹ 上一题')
+      )
     ),
     h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
       favId && fav && h('button', { onClick: () => fav.toggle(favId), style: {
@@ -1307,12 +1351,12 @@ function EdgeGlow({ strong }) {
 /* ============================================================
    模式④:固定搭配(快闪选择)
    ============================================================ */
-function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav }) {
+function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, pos, onPrev, canPrev }) {
   const correct = colChosen && colChosen === colCur.answer;
   const wrong = colChosen && colChosen !== colCur.answer;
   const parts = colCur.q.split('___');
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '固定搭配', sub: `第 ${colIndex + 1} / ${COLLOCATIONS.length}`, setScreen, favId: 'collocation#' + colIndex, fav }),
+    SubBar({ title: '固定搭配', sub: `本次第 ${pos} 题`, setScreen, favId: 'collocation#' + colIndex, fav, onPrev, canPrev }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '28px 20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '16px', textAlign: 'center' } },
       h('div', { style: { fontSize: '13px', color: MUTED, marginBottom: '14px' } }, colCur.cn),
@@ -1340,7 +1384,8 @@ function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScree
         background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.4)' } },
       h('div', { style: { fontSize: '15px', color: GREEN, fontWeight: '800', marginBottom: '6px' } },
         '✓ 正确搭配:' + colCur.q.replace('___', colCur.answer)),
-      h('div', { style: { fontSize: '13px', color: INK } }, '释义:' + colCur.cn)
+      h('div', { style: { fontSize: '13px', color: INK, marginBottom: '12px' } }, '释义:' + colCur.cn),
+      h('button', { onClick: colNext, style: { ...smallBtn(true), width: '100%' } }, '继续 →')
     ),
     wrong && h('div', { key: 'colwrong', style: {
         padding: '14px', borderRadius: '14px', background: 'rgba(220,38,38,0.05)',
@@ -1356,7 +1401,7 @@ function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScree
 /* ============================================================
    模式⑤:作文模板(默写检查)
    ============================================================ */
-function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav }) {
+function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, pos, onPrev, canPrev }) {
   const cur = ESSAY_TEMPLATES[tmplIdx];
   const done = tmplDone.filter(Boolean).length;
   const wordCount = cur.en.split(/\s+/).filter(w => !/^\.+$/.test(w)).length;
@@ -1373,7 +1418,7 @@ function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tm
     } }, w);
   });
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文模板默写', sub: `已背 ${done} / ${ESSAY_TEMPLATES.length} · 第 ${tmplIdx + 1} 张`, setScreen, favId: 'templates#' + tmplIdx, fav }),
+    SubBar({ title: '作文模板默写', sub: `本次第 ${pos} 张 · 已背 ${done}/${ESSAY_TEMPLATES.length}`, setScreen, favId: 'templates#' + tmplIdx, fav, onPrev, canPrev }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
       h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '12px' } },
@@ -1414,9 +1459,9 @@ function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tm
 /* ============================================================
    模式⑥:作文构思(自己写思路 → 对照范例骨架)
    ============================================================ */
-function Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav }) {
+function Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, pos, onPrev, canPrev }) {
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文构思', sub: `第 ${oIndex + 1} / ${ESSAY_OUTLINES.length}`, setScreen, favId: 'outline#' + oIndex, fav }),
+    SubBar({ title: '作文构思', sub: `本次第 ${pos} 题`, setScreen, favId: 'outline#' + oIndex, fav, onPrev, canPrev }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : '',
       style: { padding: '18px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
       h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '作文题目'),
@@ -1460,30 +1505,47 @@ function favLabel(mode, idx) {
   if (mode === 'outline' && ESSAY_OUTLINES[idx]) return { tag: '构思', text: ESSAY_OUTLINES[idx].topic };
   return { tag: '?', text: '(已失效)' };
 }
-function Favorites({ favs, toggleFav, gotoFav, setScreen }) {
+function Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen }) {
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '我的收藏', sub: `${favs.length} 条 · 已本地保存`, setScreen }),
-    favs.length === 0
-      ? h('div', { style: { textAlign: 'center', padding: '46px 20px', color: MUTED, fontSize: '14px', lineHeight: 1.9 } },
-          '还没有收藏~\n在任意题目右上角点「☆ 收藏」即可加入,刷新或重开浏览器都不会丢。')
-      : h('div', null, favs.map((id) => {
-          const sp = id.split('#'); const mode = sp[0]; const idx = +sp[1];
-          const info = favLabel(mode, idx);
-          return h('div', { key: id, style: { padding: '14px', borderRadius: '14px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '12px' } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
-              h('span', { style: { fontSize: '11px', fontWeight: '800', color: PURPLE, background: 'rgba(124,58,237,0.1)', padding: '3px 9px', borderRadius: '999px' } }, info.tag),
-              h('button', { onClick: () => toggleFav(id), style: { border: 'none', background: 'transparent', color: MUTED, fontSize: '13px', fontWeight: '700' } }, '✕ 取消')),
-            h('div', { style: { fontSize: '14px', color: INK, lineHeight: 1.6, marginBottom: '10px' } }, info.text),
-            info.tag !== '?' && h('button', { onClick: () => gotoFav(mode, idx), style: smallBtn(true) }, '去练习 →')
-          );
-        }))
+    SubBar({ title: '我的收藏', sub: `${favs.length} 题 · ${wordFavs.length} 词 · 已本地保存`, setScreen }),
+    (favs.length === 0 && wordFavs.length === 0)
+      && h('div', { style: { textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: '14px', lineHeight: 1.9 } },
+          '还没有收藏~\n题目:右上角点「☆ 收藏」。\n单词/词组:右键(电脑)或长按(手机)任意词,弹窗里点「☆ 加入生词本」;选中一段文字再操作可收藏词组。'),
+    // 生词本
+    wordFavs.length > 0 && h('div', { key: 'wsec', style: { marginBottom: '18px' } },
+      h('div', { style: { fontSize: '13px', fontWeight: '800', color: DEEP, margin: '4px 0 10px' } }, '📒 生词本 / 词组'),
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } },
+        wordFavs.map((w) => h('div', { key: 'wf' + w, style: {
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 10px', borderRadius: '999px',
+            border: BORDER, background: PANEL, boxShadow: SHADOW } },
+          h('span', { style: { fontSize: '14px', fontWeight: '700', color: DEEP } }, w),
+          GLOSS[w.toLowerCase()] && h('span', { style: { fontSize: '11px', color: MUTED } }, GLOSS[w.toLowerCase()]),
+          h('button', { onClick: () => toggleWordFav(w), style: { border: 'none', background: 'transparent', color: MUTED, fontSize: '13px' } }, '✕')
+        ))
+      )
+    ),
+    // 题目收藏
+    favs.length > 0 && h('div', { key: 'qsec' },
+      h('div', { style: { fontSize: '13px', fontWeight: '800', color: DEEP, margin: '4px 0 10px' } }, '📌 题目收藏'),
+      ...favs.map((id) => {
+        const sp = id.split('#'); const mode = sp[0]; const idx = +sp[1];
+        const info = favLabel(mode, idx);
+        return h('div', { key: id, style: { padding: '14px', borderRadius: '14px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '12px' } },
+          h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
+            h('span', { style: { fontSize: '11px', fontWeight: '800', color: PURPLE, background: 'rgba(124,58,237,0.1)', padding: '3px 9px', borderRadius: '999px' } }, info.tag),
+            h('button', { onClick: () => toggleFav(id), style: { border: 'none', background: 'transparent', color: MUTED, fontSize: '13px', fontWeight: '700' } }, '✕ 取消')),
+          h('div', { style: { fontSize: '14px', color: INK, lineHeight: 1.6, marginBottom: '10px' } }, info.text),
+          info.tag !== '?' && h('button', { onClick: () => gotoFav(mode, idx), style: smallBtn(true) }, '去练习 →')
+        );
+      })
+    )
   );
 }
 
 /* ============================================================
    查词弹窗(右键 / 长按取词)
    ============================================================ */
-function WordPopup({ dictWord, dictPos, dictData, close }) {
+function WordPopup({ dictWord, dictPos, dictData, close, isWordFav, onToggleWordFav }) {
   const gloss = GLOSS[dictWord.toLowerCase()];
   const vw = (window.innerWidth || 360), vh = (window.innerHeight || 640);
   const left = Math.min(Math.max(dictPos.x, 120), vw - 16);
@@ -1492,19 +1554,24 @@ function WordPopup({ dictWord, dictPos, dictData, close }) {
     h('div', { onClick: close, style: { position: 'fixed', inset: 0, zIndex: 80 } }),
     h('div', { style: {
         position: 'fixed', left: left + 'px', top: top + 'px', transform: 'translateX(-50%)', zIndex: 81,
-        maxWidth: '280px', minWidth: '190px', padding: '14px 16px', borderRadius: '14px',
+        maxWidth: '280px', minWidth: '200px', padding: '14px 16px', borderRadius: '14px',
         background: '#fff', border: '1px solid rgba(124,58,237,0.3)', boxShadow: '0 10px 32px rgba(60,30,120,0.28)' } },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } },
         h('span', { style: { fontSize: '19px', fontWeight: '800', color: DEEP } }, dictWord),
         h('button', { onClick: close, style: { border: 'none', background: 'transparent', color: MUTED, fontSize: '16px' } }, '✕')),
       gloss && h('div', { style: { fontSize: '15px', color: INK, fontWeight: '600', marginBottom: '6px' } }, gloss),
       dictData === null && h('div', { style: { fontSize: '12px', color: MUTED } }, '联网查询中…'),
-      dictData === 'error' && !gloss && h('div', { style: { fontSize: '12px', color: MUTED } }, '离线或未收录,暂无释义'),
+      dictData === 'error' && !gloss && h('div', { style: { fontSize: '12px', color: MUTED } }, '离线或未收录,可直接收藏'),
       dictData && dictData !== 'error' && h('div', null,
         dictData.phonetic && h('div', { style: { fontSize: '13px', color: PURPLE, marginBottom: '4px' } }, dictData.phonetic),
         ...dictData.defs.map((d, i) => h('div', { key: 'd' + i, style: { fontSize: '12px', color: INK, lineHeight: 1.5, marginTop: '4px' } },
           h('span', { style: { color: MUTED } }, (d.pos ? d.pos + '. ' : '')), d.def))
-      )
+      ),
+      h('button', { onClick: onToggleWordFav, style: {
+          marginTop: '12px', width: '100%', padding: '9px', borderRadius: '10px', fontSize: '14px', fontWeight: '800',
+          border: isWordFav ? '1px solid ' + PURPLE : 'none',
+          background: isWordFav ? 'rgba(124,58,237,0.12)' : 'linear-gradient(180deg, #a855f7, #7c3aed)',
+          color: isWordFav ? PURPLE : '#fff' } }, isWordFav ? '★ 已加入生词本(点击移除)' : '☆ 加入生词本')
     )
   );
 }
