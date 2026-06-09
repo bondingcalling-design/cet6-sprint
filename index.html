@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>六级冲刺</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(ellipse at top, #faf7ff 0%, #f1ebfb 58%, #e8def6 100%);
+    background-attachment: fixed;
+    color: #3b2d5e;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    user-select: none;
+  }
+  #root { min-height: 100vh; }
+
+  @keyframes shard {
+    0%   { transform: translate(0,0) scale(.5) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--rot)); opacity: 0; }
+  }
+  @keyframes ringPulse {
+    0%   { transform: scale(.2); opacity: .9; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    15% { transform: translateX(-9px) rotate(-1deg); }
+    30% { transform: translateX(8px) rotate(1deg); }
+    45% { transform: translateX(-7px); }
+    60% { transform: translateX(6px); }
+    75% { transform: translateX(-4px); }
+  }
+  @keyframes correctFlash {
+    0%   { box-shadow: 0 0 0 0 rgba(168,85,247,0); }
+    40%  { box-shadow: 0 0 36px 6px rgba(168,85,247,.55); }
+    100% { box-shadow: 0 0 0 0 rgba(168,85,247,0); }
+  }
+  @keyframes riseIn {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes comboBanner {
+    0%   { transform: translate(-50%, 20px) scale(.6); opacity: 0; }
+    25%  { transform: translate(-50%, 0) scale(1.15); opacity: 1; }
+    75%  { transform: translate(-50%, 0) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -18px) scale(.9); opacity: 0; }
+  }
+  @keyframes edgeGlow {
+    0%,100% { opacity: 0; }
+    50% { opacity: 1; }
+  }
+  @keyframes litPop {
+    0% { transform: scale(.9); }
+    50% { transform: scale(1.04); }
+    100% { transform: scale(1); }
+  }
+  @keyframes cursorBlink { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+
+  .fx-correct { animation: correctFlash .7s ease-out; }
+  .fx-wrong { animation: shake .45s ease-in-out; }
+  button { font-family: inherit; cursor: pointer; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #c9b8ec; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* ============================================================
+   极简 React 风格运行时:useState + 增量 diff + h() 超脚本
+   ============================================================ */
+const root = document.getElementById('root');
+let hookStates = [];
+let hookIndex = 0;
+let scheduled = false;
+
+function useState(initial) {
+  const i = hookIndex++;
+  if (hookStates[i] === undefined) {
+    hookStates[i] = typeof initial === 'function' ? initial() : initial;
+  }
+  const setter = (v) => {
+    hookStates[i] = typeof v === 'function' ? v(hookStates[i]) : v;
+    scheduleRender();
+  };
+  return [hookStates[i], setter];
+}
+function scheduleRender() {
+  if (scheduled) return;
+  scheduled = true;
+  Promise.resolve().then(() => { scheduled = false; doRender(); });
+}
+function doRender() {
+  hookIndex = 0;
+  const tree = App();
+  reconcile(root, [tree]);   // 增量 diff,而非整树重建 —— 避免每次操作动画重放/闪烁
+}
+function h(tag, props, ...children) {
+  return { tag, props: props || {}, children: children.flat(Infinity).filter(c => c != null && c !== false) };
+}
+function isText(v) { return typeof v === 'string' || typeof v === 'number'; }
+function keyOf(v) { return (v && v.props && v.props.key != null) ? v.props.key : null; }
+
+function setProp(el, k, ov, nv) {
+  if (k === 'key' || k === 'ref') return;
+  if (k === 'style') { updateStyle(el, ov || {}, nv || {}); return; }
+  if (k === 'className') { if (nv !== ov) el.className = nv || ''; return; }
+  if (k.startsWith('on')) {
+    const ev = k.slice(2).toLowerCase();
+    el._handlers = el._handlers || {};
+    if (el._handlers[ev]) { el.removeEventListener(ev, el._handlers[ev]); delete el._handlers[ev]; }
+    if (typeof nv === 'function') { el.addEventListener(ev, nv); el._handlers[ev] = nv; }
+    return;
+  }
+  if (nv !== ov) {
+    if (nv == null || nv === false) el.removeAttribute(k);
+    else el.setAttribute(k, nv);
+  }
+}
+function updateStyle(el, oldS, newS) {
+  for (const k in oldS) { if (!(k in newS)) { if (k.startsWith('--')) el.style.removeProperty(k); else el.style[k] = ''; } }
+  for (const k in newS) { if (newS[k] !== oldS[k]) { if (k.startsWith('--')) el.style.setProperty(k, newS[k]); else el.style[k] = newS[k]; } }
+}
+function updateProps(el, oldP, newP) {
+  oldP = oldP || {}; newP = newP || {};
+  for (const k in oldP) { if (!(k in newP)) setProp(el, k, oldP[k], undefined); }
+  for (const k in newP) { setProp(el, k, oldP[k], newP[k]); }
+}
+function createDom(vnode) {
+  if (isText(vnode)) return document.createTextNode(String(vnode));
+  const el = document.createElement(vnode.tag);
+  updateProps(el, {}, vnode.props);
+  (vnode.children || []).forEach(c => el.appendChild(createDom(c)));
+  el._vchildren = vnode.children || [];
+  return el;
+}
+function compatible(ov, nv) {
+  // 可原地复用:同为文本,或同标签且同 key —— 否则需新建
+  if (isText(ov) || isText(nv)) return isText(ov) && isText(nv);
+  return ov.tag === nv.tag && keyOf(ov) === keyOf(nv);
+}
+function patchNode(dom, ov, nv) {
+  if (isText(ov) && isText(nv)) {
+    if (String(ov) !== String(nv)) dom.nodeValue = String(nv);
+    return;
+  }
+  updateProps(dom, ov.props, nv.props);
+  reconcile(dom, nv.children);
+}
+// 带 key 的协调:按 key 匹配复用,无 key 的按同位下标匹配,最后按新顺序就位。
+// 这样在中间插入/删除条件节点(如错题解释面板)不会错位污染相邻兄弟。
+function reconcile(parent, newChildren) {
+  newChildren = (newChildren || []).filter(c => c != null && c !== false);
+  const oldChildren = parent._vchildren || [];
+  const oldDom = [];
+  for (let i = 0; i < oldChildren.length; i++) oldDom.push(parent.childNodes[i]);
+  const oldByKey = new Map();
+  oldChildren.forEach((v, i) => { const k = keyOf(v); if (k != null) oldByKey.set(k, i); });
+  const used = new Array(oldChildren.length).fill(false);
+  const resultDoms = [];
+  for (let i = 0; i < newChildren.length; i++) {
+    const nv = newChildren[i];
+    const k = keyOf(nv);
+    let oi = -1;
+    if (k != null) { if (oldByKey.has(k)) oi = oldByKey.get(k); }
+    else if (oldChildren[i] != null && keyOf(oldChildren[i]) == null) oi = i;
+    let dom;
+    if (oi >= 0 && !used[oi] && oldDom[oi] && compatible(oldChildren[oi], nv)) {
+      patchNode(oldDom[oi], oldChildren[oi], nv);
+      dom = oldDom[oi]; used[oi] = true;
+    } else {
+      dom = createDom(nv);   // 新建(动画借此按需触发)
+    }
+    resultDoms.push(dom);
+  }
+  // 删除未被复用的旧节点
+  for (let i = 0; i < oldDom.length; i++) {
+    if (!used[i] && oldDom[i] && oldDom[i].parentNode === parent) parent.removeChild(oldDom[i]);
+  }
+  // 按新顺序就位(insertBefore 会移动已存在节点)
+  for (let i = 0; i < resultDoms.length; i++) {
+    const d = resultDoms[i];
+    if (parent.childNodes[i] !== d) parent.insertBefore(d, parent.childNodes[i] || null);
+  }
+  parent._vchildren = newChildren;
+}
+
+/* ============================================================
+   Web Audio 合成音效
+   ============================================================ */
+let actx = null;
+function getCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function playCorrect() {
+  try {
+    const ctx = getCtx(), now = ctx.currentTime;
+    [523.25, 659.25, 783.99].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      o.connect(g); g.connect(ctx.destination);
+      const t = now + i * 0.07;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.start(t); o.stop(t + 0.2);
+    });
+  } catch (e) {}
+}
+function playWrong() {
+  try {
+    const ctx = getCtx(), now = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(170, now);
+    o.frequency.exponentialRampToValueAtTime(70, now + 0.25);
+    o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.18, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    o.start(now); o.stop(now + 0.31);
+  } catch (e) {}
+}
+function playCombo() {
+  try {
+    const ctx = getCtx(), now = ctx.currentTime;
+    [659.25, 880, 1046.5, 1318.5].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = f;
+      o.connect(g); g.connect(ctx.destination);
+      const t = now + i * 0.06;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.14, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.start(t); o.stop(t + 0.18);
+    });
+  } catch (e) {}
+}
+
+/* ============================================================
+   工具
+   ============================================================ */
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function daysToExam() {
+  const exam = new Date('2026-06-13T00:00:00');
+  const now = new Date();
+  const d = Math.ceil((exam - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+  return d;
+}
+
+/* ============================================================
+   数据
+   ============================================================ */
+// 模式①:翻译速拼(why = 该句考点讲解,答错时展示)
+const TRANSLATIONS = [
+  { zh: "随着科技的飞速发展,越来越多的人开始依赖智能手机。",
+    tokens: ["With", "the", "rapid", "development", "of", "technology,", "more", "and", "more", "people", "begin", "to", "rely", "on", "smartphones."],
+    why: "考点:「随着…的发展」固定译 With the development of…;「越来越多的人」= more and more people;「开始做某事」begin to do sth;「依赖」rely on。" },
+  { zh: "这座古老的石桥被认为是中国古代建筑的杰作。",
+    tokens: ["This", "ancient", "stone", "bridge", "is", "considered", "a", "masterpiece", "of", "ancient", "Chinese", "architecture."],
+    why: "考点:被动「被认为是」= is considered + 名词,consider 后可直接接宾语补足语,无需加 as。" },
+  { zh: "长城被视为中华民族精神的象征。",
+    tokens: ["The", "Great", "Wall", "is", "regarded", "as", "a", "symbol", "of", "the", "Chinese", "national", "spirit."],
+    why: "考点:「被视为」= is regarded as,regard 必须与 as 搭配,不可省略;「象征」a symbol of。" },
+  { zh: "这种传统手工艺已经被列入国家非物质文化遗产。",
+    tokens: ["This", "traditional", "craft", "has", "been", "listed", "as", "national", "intangible", "cultural", "heritage."],
+    why: "考点:现在完成时被动「已经被列入」= has been listed as,强调动作已完成且对现在仍有影响。" },
+  { zh: "发明这项技术的科学家赢得了国家科学奖。",
+    tokens: ["The", "scientist", "who", "invented", "this", "technology", "won", "the", "national", "science", "award."],
+    why: "考点:定语从句修饰人,关系词用 who 引导且在从句中作主语,不可省略:The scientist who invented…。" },
+  { zh: "正是教育改变了无数年轻人的命运。",
+    tokens: ["It", "is", "education", "that", "has", "changed", "the", "destiny", "of", "countless", "young", "people."],
+    why: "考点:强调句 It is + 被强调成分 + that…;此处强调主语 education,谓语用现在完成时 has changed。" },
+  { zh: "随着生活水平的提高,人们越来越重视身体健康。",
+    tokens: ["With", "the", "improvement", "of", "living", "standards,", "people", "pay", "more", "and", "more", "attention", "to", "health."],
+    why: "考点:「随着…的提高」With the improvement of…;「越来越重视」pay more and more attention to。" },
+  { zh: "越来越多的外国人对学习汉语产生了浓厚的兴趣。",
+    tokens: ["More", "and", "more", "foreigners", "have", "become", "interested", "in", "learning", "Chinese."],
+    why: "考点:「对…感兴趣」be interested in + 动名词(learning);主语 foreigners 为复数,助动词用 have。" },
+  { zh: "茶被认为是中国文化不可或缺的组成部分。",
+    tokens: ["Tea", "is", "regarded", "as", "an", "indispensable", "part", "of", "Chinese", "culture."],
+    why: "考点:「被认为是」is regarded as;「不可或缺的」indispensable(元音音素前用 an);「组成部分」part of。" },
+  { zh: "这部经典小说已经被翻译成了多种语言。",
+    tokens: ["This", "classic", "novel", "has", "been", "translated", "into", "many", "languages."],
+    why: "考点:「被翻译成」has been translated into,translate 与介词 into 固定搭配。" },
+  { zh: "政府采取的措施有效地促进了经济增长。",
+    tokens: ["The", "measures", "that", "the", "government", "took", "effectively", "promoted", "economic", "growth."],
+    why: "考点:定语从句修饰物用 that/which,先行词 measures 在从句中作 took 的宾语:The measures that the government took…。" },
+  { zh: "中国的高铁网络是世界上最发达的网络之一。",
+    tokens: ["China's", "high-speed", "rail", "network", "is", "one", "of", "the", "most", "developed", "in", "the", "world."],
+    why: "考点:「最…之一」one of the most + 形容词 + (复数名词);此处 developed 后承前省略 networks。" },
+  { zh: "这个项目不仅创造了就业机会,还改善了当地环境。",
+    tokens: ["This", "project", "not", "only", "created", "jobs", "but", "also", "improved", "the", "local", "environment."],
+    why: "考点:「不仅…还…」not only… but also…,连接两个并列谓语时直接接动词(created… improved…)。" },
+  { zh: "随着城市化的推进,许多传统村落正在逐渐消失。",
+    tokens: ["With", "the", "advance", "of", "urbanization,", "many", "traditional", "villages", "are", "gradually", "disappearing."],
+    why: "考点:「随着…的推进」With the advance of…;「正在逐渐消失」用现在进行时 are gradually disappearing。" },
+  { zh: "这位杰出的科学家被誉为现代农业的奠基人。",
+    tokens: ["This", "outstanding", "scientist", "is", "hailed", "as", "the", "founder", "of", "modern", "agriculture."],
+    why: "考点:「被誉为」is hailed as(高级表达,优于 is called);「奠基人」the founder of。" },
+];
+
+// 模式②:句式点亮(why = 为什么选它 / 其它选项为何错)
+const PATTERNS = [
+  { name: "强调句 It is ... that ...", tip: "正是勤奋造就了成功(填连接词)",
+    pre: "It is diligence ", blank: "that", post: " leads to success.",
+    options: ["that", "which", "what", "who"], answer: "that",
+    full: "It is diligence that leads to success. — 正是勤奋造就了成功。",
+    why: "强调句固定结构 It is + 被强调部分 + that,无论强调什么成分都可用 that。which/what 不能引导强调句;who 仅在强调“人”时才可替代 that。" },
+  { name: "部分倒装 Not only ... but also", tip: "不仅会英语,还会法语(填助动词)",
+    pre: "Not only ", blank: "does", post: " he speak English, but he also speaks French.",
+    options: ["does", "did", "is", "has"], answer: "does",
+    full: "Not only does he speak English, but he also speaks French. — 他不仅会说英语,还会说法语。",
+    why: "否定词 Not only 置于句首,主句须部分倒装:助动词 does + 主语 + 动词原形(speak)。did 与后文一般现在时不一致;is/has 不能搭配实义动词 speak。" },
+  { name: "倒装 Only when ...", tip: "只有齐心协力才能实现目标(填情态部分)",
+    pre: "Only when we work together ", blank: "can", post: " we achieve our goals.",
+    options: ["can", "we can", "do we", "will"], answer: "can",
+    full: "Only when we work together can we achieve our goals. — 只有当我们齐心协力,才能实现目标。",
+    why: "Only + 状语置于句首引起部分倒装,情态/助动词提到主语前:can we。we can 语序没倒装;do we 后缺动词原形语义不通;will 后缺主语。" },
+  { name: "虚拟语气(与现在相反)", tip: "如果我是你,我会接受这份工作",
+    pre: "If I ", blank: "were", post: " you, I would accept the offer.",
+    options: ["were", "was", "am", "be"], answer: "were",
+    full: "If I were you, I would accept the offer. — 如果我是你,我会接受这份工作。",
+    why: "与现在事实相反的虚拟语气,从句 be 动词一律用 were(不分人称)。was 表真实过去;am 是陈述现在;be 不符合虚拟规则。" },
+  { name: "虚拟语气(与过去相反)", tip: "她若当初更努力,本可通过考试",
+    pre: "If she had studied harder, she ", blank: "would", post: " have passed the exam.",
+    options: ["would", "will", "can", "may"], answer: "would",
+    full: "If she had studied harder, she would have passed the exam. — 她若当初更努力,本可通过考试。",
+    why: "与过去事实相反:从句 had done,主句须 would have done。will 不表虚拟;can/may 不能构成“本可以”的虚拟完成结构。" },
+  { name: "There is no doubt that", tip: "毫无疑问,教育至关重要(填连接词)",
+    pre: "There is no doubt ", blank: "that", post: " education is of great importance.",
+    options: ["that", "which", "what", "whether"], answer: "that",
+    full: "There is no doubt that education is of great importance. — 毫无疑问,教育至关重要。",
+    why: "doubt 在肯定句中常接同位语从句,连接词用 that(不在从句中充当成分)。which/what 须在从句中作成分;whether 表“是否”,语义不符。" },
+  { name: "The more ... the more", tip: "你越努力,收获越多",
+    pre: "The harder you work, ", blank: "the more", post: " you will achieve.",
+    options: ["the more", "more", "the most", "much more"], answer: "the more",
+    full: "The harder you work, the more you will achieve. — 你越努力,收获就越多。",
+    why: "“越…越…”结构 The + 比较级…, the + 比较级…,后半句须带 the:the more。more/much more 缺少固定的 the;the most 是最高级,不用于此结构。" },
+  { name: "so ... that 结果状语", tip: "他太累了,立刻就睡着了",
+    pre: "He was ", blank: "so", post: " tired that he fell asleep immediately.",
+    options: ["so", "such", "very", "too"], answer: "so",
+    full: "He was so tired that he fell asleep immediately. — 他太累了,以至于立刻就睡着了。",
+    why: "so + 形容词/副词 + that(如此…以至于)。such 用来修饰名词;very/too 不能引出 that 结果状语从句。" },
+  { name: "such ... that 结果状语", tip: "那是如此美的景色,人人惊叹",
+    pre: "It was ", blank: "such", post: " a beautiful scene that everyone was amazed.",
+    options: ["such", "so", "very", "too"], answer: "such",
+    full: "It was such a beautiful scene that everyone was amazed. — 那是如此美丽的景色,以至于人人惊叹。",
+    why: "such + a/an + 形容词 + 名词 + that;因含名词 scene 用 such。若用 so 须改语序为 so beautiful a scene;very/too 不接 that 从句。" },
+  { name: "非限制性定语从句 which", tip: "他考试不及格,这让父母失望(填关系词)",
+    pre: "He failed the exam, ", blank: "which", post: " disappointed his parents.",
+    options: ["which", "that", "it", "what"], answer: "which",
+    full: "He failed the exam, which disappointed his parents. — 他考试不及格,这让他的父母很失望。",
+    why: "非限制性定语从句指代前面整件事,用 which 引导。that 不能引导非限制性从句;it 是代词不能引导从句;what 不作关系代词。" },
+  { name: "It is high time that(虚拟)", tip: "我们该是时候行动起来保护自然了(填动词形式)",
+    pre: "It is high time that we ", blank: "took", post: " action to protect nature.",
+    options: ["took", "take", "will take", "taking"], answer: "took",
+    full: "It is high time that we took action to protect nature. — 我们早该行动起来保护自然了。",
+    why: "It is high time that + 主语 + 动词过去式(虚拟语气),表示“早就该做某事”。take 时态错;will take/taking 都不符合该固定虚拟结构。" },
+  { name: "No sooner ... than(倒装)", tip: "他一到会议就开始了(填助动词)",
+    pre: "No sooner ", blank: "had", post: " he arrived than the meeting began.",
+    options: ["had", "has", "did", "was"], answer: "had",
+    full: "No sooner had he arrived than the meeting began. — 他一到达,会议就开始了。",
+    why: "No sooner 置句首引起倒装,且“一…就…”用过去完成时:had + 主语 + done,than 后接一般过去时。has 时态错;did/was 不构成完成体。" },
+  { name: "Those who ... 主语从句", tip: "努力奋斗的人终将获得回报",
+    pre: "Those ", blank: "who", post: " work hard will eventually be rewarded.",
+    options: ["who", "which", "whom", "whose"], answer: "who",
+    full: "Those who work hard will eventually be rewarded. — 那些努力奋斗的人终将获得回报。",
+    why: "Those who… = “…的人”,who 指代人且在从句中作主语。which 指物;whom 作宾语;whose 表所属,均不符。" },
+];
+
+// 模式③:同义替换(阅读高频)
+const SYNONYM_BATCHES = [
+  [["decrease", "decline"], ["significant", "considerable"], ["obtain", "acquire"], ["important", "crucial"]],
+  [["increase", "rise"], ["difficult", "challenging"], ["show", "demonstrate"], ["enough", "sufficient"]],
+  [["harmful", "detrimental"], ["famous", "renowned"], ["improve", "enhance"], ["reason", "cause"]],
+  [["stop", "cease"], ["begin", "commence"], ["help", "assist"], ["need", "require"]],
+  [["huge", "enormous"], ["fast", "rapid"], ["get", "gain"], ["idea", "notion"]],
+  [["protect", "safeguard"], ["change", "alter"], ["rich", "wealthy"], ["smart", "intelligent"]],
+  [["clear", "evident"], ["hard", "arduous"], ["allow", "permit"], ["beautiful", "gorgeous"]],
+];
+
+// 模式④:固定搭配(高频搭配快闪,写作/阅读通吃)
+const COLLOCATIONS = [
+  { q: "pay attention ___ details", options: ["to", "on", "at", "in"], answer: "to", cn: "注意细节" },
+  { q: "take ___ of the opportunity", options: ["advantage", "chance", "benefit", "profit"], answer: "advantage", cn: "利用机会" },
+  { q: "be aware ___ the risks", options: ["of", "about", "with", "for"], answer: "of", cn: "意识到风险" },
+  { q: "This can account ___ the result", options: ["for", "to", "of", "with"], answer: "for", cn: "解释 / 导致这一结果" },
+  { q: "take the cost into ___", options: ["account", "mind", "thought", "notice"], answer: "account", cn: "把成本考虑在内" },
+  { q: "make full ___ of resources", options: ["use", "using", "used", "usage"], answer: "use", cn: "充分利用资源" },
+  { q: "come ___ with a solution", options: ["up", "out", "over", "along"], answer: "up", cn: "想出解决办法" },
+  { q: "carry ___ the plan", options: ["out", "on", "off", "up"], answer: "out", cn: "执行计划" },
+  { q: "be responsible ___ the accident", options: ["for", "to", "of", "with"], answer: "for", cn: "对……负责" },
+  { q: "give ___ to many problems", options: ["rise", "raise", "birth", "way"], answer: "rise", cn: "引起许多问题" },
+  { q: "contribute ___ the economy", options: ["to", "for", "in", "with"], answer: "to", cn: "为经济做贡献" },
+  { q: "keep the goal ___ mind", options: ["in", "on", "at", "to"], answer: "in", cn: "把目标牢记在心" },
+  { q: "On the ___, I disagree", options: ["contrary", "opposite", "reverse", "other"], answer: "contrary", cn: "相反,我并不同意" },
+  { q: "___ short, practice matters most", options: ["In", "On", "At", "For"], answer: "In", cn: "简而言之,练习最重要" },
+  { q: "at the ___ of one's health", options: ["expense", "cost", "price", "charge"], answer: "expense", cn: "以健康为代价" },
+  { q: "adapt ___ the new environment", options: ["to", "with", "for", "in"], answer: "to", cn: "适应新环境" },
+  { q: "be addicted ___ online games", options: ["to", "in", "on", "with"], answer: "to", cn: "沉迷于网络游戏" },
+  { q: "play a vital ___ in society", options: ["role", "act", "place", "duty"], answer: "role", cn: "在社会中起重要作用" },
+];
+
+// 模式⑤:作文模板(万能句式背诵卡)
+const ESSAY_TEMPLATES = [
+  { cat: "开头", zh: "如今,……已成为一个广受关注的热门话题。", en: "Nowadays, ... has become a heated topic of widespread concern." },
+  { cat: "开头", zh: "随着……的迅速发展,越来越多的人开始意识到……的重要性。", en: "With the rapid development of ..., an increasing number of people have come to realize the importance of ..." },
+  { cat: "开头", zh: "谈到……,不同的人持有不同的看法。", en: "When it comes to ..., opinions vary from person to person." },
+  { cat: "亮明观点", zh: "就我个人而言,我坚定地认为……。", en: "As far as I am concerned, I firmly hold the view that ..." },
+  { cat: "亮明观点", zh: "不可否认,……。", en: "There is no denying that ..." },
+  { cat: "举例论证", zh: "以……为例,它生动地说明了这一点。", en: "Take ... as an example, which vividly illustrates this point." },
+  { cat: "举例论证", zh: "一项最新研究表明,……。", en: "A recent study has revealed that ..." },
+  { cat: "让步转折", zh: "诚然,……;然而,我们不应忽视……这一事实。", en: "Admittedly, ...; however, we should not overlook the fact that ..." },
+  { cat: "让步转折", zh: "凡事皆有两面性。", en: "Every coin has two sides." },
+  { cat: "原因影响", zh: "造成这一现象的原因是多方面的。", en: "A variety of factors may account for this phenomenon." },
+  { cat: "原因影响", zh: "这不仅……,而且……。", en: "This not only ..., but also ..." },
+  { cat: "结尾", zh: "综上所述,我们可以有把握地得出结论:……。", en: "To sum up, we can safely draw the conclusion that ..." },
+  { cat: "结尾", zh: "因此,我们早就应该采取有效措施来……。", en: "Therefore, it is high time that we took effective measures to ..." },
+  { cat: "结尾", zh: "只有这样,我们才能……。", en: "Only in this way can we ..." },
+  { cat: "图表数据", zh: "如图所示,……发生了显著变化。", en: "As is clearly shown in the chart, ... has changed dramatically." },
+  { cat: "图表数据", zh: "数据表明,……呈上升 / 下降趋势。", en: "The data indicate that ... has been on the rise / on the decline." },
+];
+
+// 模式⑥:作文构思(议论文骨架逻辑排序,steps 已按正确顺序)
+const ESSAY_OUTLINES = [
+  { topic: "Online Education 网络教育", steps: ["引入:近年来网络教育迅速兴起", "好处:打破时空限制,学习更灵活", "弊端:缺乏监督,对自律要求高", "结论:应扬长避短,合理利用"] },
+  { topic: "Part-time Jobs 大学生兼职", steps: ["现象:越来越多大学生选择兼职", "益处:积累社会经验、减轻负担", "风险:可能挤占时间影响学业", "建议:量力而行,平衡学业与兼职"] },
+  { topic: "Smartphone Addiction 手机依赖", steps: ["现象:智能手机已成为生活必需品", "问题:过度依赖损害健康与人际", "原因:娱乐便捷且缺乏自控", "对策:合理规划使用时间"] },
+  { topic: "Protecting Tradition 传统文化保护", steps: ["背景:全球化下传统文化受到冲击", "意义:文化是民族认同的根基", "措施:加强教育与创新传播", "结论:保护传统文化人人有责"] },
+  { topic: "Volunteering 志愿服务", steps: ["现象:志愿服务日益普及", "对个人:帮助他人、实现自我价值", "对社会:传递正能量、促进和谐", "呼吁:积极投身志愿活动"] },
+  { topic: "Artificial Intelligence 人工智能", steps: ["趋势:AI 正深刻改变各行各业", "机遇:提升效率、解放人力", "挑战:就业冲击与伦理风险", "态度:理性拥抱,趋利避害"] },
+];
+
+/* ============================================================
+   主题色(白底紫调)
+   ============================================================ */
+const PURPLE = "#7c3aed";   // 主紫
+const DEEP   = "#5b21b6";   // 深紫(强调文字)
+const BRIGHT = "#a855f7";   // 亮紫(高光/粒子)
+const MUTED  = "#8b7fb0";   // 次要文字
+const INK    = "#3b2d5e";   // 正文
+const GREEN  = "#16a34a";   // 正确
+const RED    = "#dc2626";   // 错误
+const PANEL  = "#ffffff";
+const BORDER = "1px solid rgba(124,58,237,0.18)";
+const SHADOW = "0 6px 22px rgba(124,58,237,0.10)";
+
+// 全局 ESC 监听(只挂一次)
+const appApi = { toggleDisguise: () => {} };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); appApi.toggleDisguise(); }
+});
+
+/* ============================================================
+   App
+   ============================================================ */
+function App() {
+  // —— 全局
+  const [screen, setScreen] = useState('menu');     // menu | translate | pattern | synonym
+  const [disguise, setDisguise] = useState(false);
+  const [todayCount, setTodayCount] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [fx, setFx] = useState(null);               // 'correct' | 'wrong' | null
+  const [comboMsg, setComboMsg] = useState(null);
+
+  // —— 翻译速拼
+  const [tIndex, setTIndex] = useState(0);
+  const [tShuffle, setTShuffle] = useState(() => makeShuffle(0));
+  const [tPicked, setTPicked] = useState([]);       // 存 tShuffle 下标
+  const [tShowWrong, setTShowWrong] = useState(false);
+
+  // —— 句式点亮
+  const [pIndex, setPIndex] = useState(0);
+  const [pLit, setPLit] = useState(() => Array(PATTERNS.length).fill(false));
+  const [pChosen, setPChosen] = useState(null);
+
+  // —— 同义替换
+  const [sBatch, setSBatch] = useState(0);
+  const [sOrder, setSOrder] = useState(() => shuffle([0, 1, 2, 3, 4, 5, 6, 7]));
+  const [sMatched, setSMatched] = useState(() => Array(8).fill(false));
+  const [sSel, setSSel] = useState(null);
+  const [sWrongPair, setSWrongPair] = useState([]);
+  const [sStart, setSStart] = useState(() => Date.now());
+  const [sDone, setSDone] = useState(false);
+  const [sElapsed, setSElapsed] = useState(0);
+  const [sHint, setSHint] = useState(null);
+
+  // —— 固定搭配
+  const [colIndex, setColIndex] = useState(0);
+  const [colChosen, setColChosen] = useState(null);
+
+  // —— 作文模板
+  const [tmplIdx, setTmplIdx] = useState(0);
+  const [tmplReveal, setTmplReveal] = useState(false);
+  const [tmplDone, setTmplDone] = useState(() => Array(ESSAY_TEMPLATES.length).fill(false));
+
+  // —— 作文构思
+  const [oIndex, setOIndex] = useState(0);
+  const [oShuffle, setOShuffle] = useState(() => shuffleOutline(0));
+  const [oPicked, setOPicked] = useState([]);
+  const [oShowWrong, setOShowWrong] = useState(false);
+
+  // 注册 ESC 切换
+  appApi.toggleDisguise = () => setDisguise(d => !d);
+
+  /* —— 通用答对/答错流程 —— */
+  function correctFlow() {
+    setTodayCount(c => c + 1);
+    setCombo(c => {
+      const nc = c + 1;
+      if (nc === 5 || nc === 10 || (nc > 10 && nc % 10 === 0)) {
+        playCombo();
+        setComboMsg(nc >= 10 ? `⚡ ${nc} 连击!紫电狂飙!` : `✨ ${nc} 连击!渐入佳境!`);
+        setTimeout(() => setComboMsg(null), 1400);
+      }
+      return nc;
+    });
+    setFx('correct');
+    playCorrect();
+    setTimeout(() => setFx(null), 700);
+  }
+  function wrongFlow() {
+    setCombo(0);
+    setFx('wrong');
+    playWrong();
+    setTimeout(() => setFx(null), 480);
+  }
+
+  /* —— 进入各模式 —— */
+  function enterTranslate() {
+    setScreen('translate');
+    setTPicked([]); setTShowWrong(false);
+    setTShuffle(makeShuffle(tIndex));
+  }
+  function enterPattern() { setScreen('pattern'); setPChosen(null); }
+  function enterSynonym() { setScreen('synonym'); newBatch(0); }
+
+  /* —— 翻译逻辑(按单词文本判对 → 两个相同的词换序也算对) —— */
+  const tCur = TRANSLATIONS[tIndex];
+  function nextSentence() {
+    setTIndex(i => {
+      const ni = (i + 1) % TRANSLATIONS.length;
+      setTShuffle(makeShuffle(ni));
+      return ni;
+    });
+    setTPicked([]); setTShowWrong(false);
+  }
+  function retryTranslate() { setTShowWrong(false); setTPicked([]); }
+  function pickBlock(pos) {
+    if (tShowWrong) return;
+    const np = [...tPicked, pos];
+    setTPicked(np);
+    if (np.length === tCur.tokens.length) {
+      // 关键:逐位比较单词文本,而非原始下标 —— 重复词不区分顺序
+      const ok = np.every((p, idx) => tShuffle[p].w === tCur.tokens[idx]);
+      if (ok) { correctFlow(); setTimeout(nextSentence, 780); }
+      else { wrongFlow(); setTShowWrong(true); }   // 不自动消失,留给用户看解释
+    }
+  }
+  function undoBlock() {
+    if (tShowWrong) return;
+    setTPicked(p => p.slice(0, -1));
+  }
+
+  /* —— 句式逻辑 —— */
+  const pCur = PATTERNS[pIndex];
+  function nextPattern() { setPIndex(i => (i + 1) % PATTERNS.length); setPChosen(null); }
+  function chooseOption(opt) {
+    if (pChosen) return;
+    setPChosen(opt);
+    if (opt === pCur.answer) {
+      setPLit(arr => { const n = arr.slice(); n[pIndex] = true; return n; });
+      correctFlow();
+      setTimeout(() => { setPChosen(null); nextPattern(); }, 1000);
+    } else {
+      wrongFlow();   // 答错:停下展示解释,等用户点“继续”
+    }
+  }
+
+  /* —— 同义逻辑 —— */
+  const sPairs = SYNONYM_BATCHES[sBatch];
+  const sWords = sPairs.flatMap((p, pi) => p.map(w => ({ w, pi })));
+  function newBatch(b) {
+    setSBatch(b);
+    setSOrder(shuffle([0, 1, 2, 3, 4, 5, 6, 7]));
+    setSMatched(Array(8).fill(false));
+    setSSel(null); setSWrongPair([]); setSDone(false); setSElapsed(0); setSHint(null);
+    setSStart(Date.now());
+  }
+  function tapCard(i) {
+    if (sMatched[i] || sDone || sWrongPair.length) return;
+    if (sSel === null) { setSSel(i); return; }
+    if (sSel === i) { setSSel(null); return; }
+    if (sWords[sSel].pi === sWords[i].pi) {
+      const nm = sMatched.slice(); nm[sSel] = true; nm[i] = true;
+      setSMatched(nm); setSSel(null); setSHint(null);
+      correctFlow();
+      if (nm.every(Boolean)) {
+        setSDone(true);
+        setSElapsed((Date.now() - sStart) / 1000);
+      }
+    } else {
+      const a = sWords[sSel], b = sWords[i];
+      const pa = sPairs[a.pi].find(w => w !== a.w);
+      const pb = sPairs[b.pi].find(w => w !== b.w);
+      setSHint(`“${a.w}” 的同义词是 “${pa}”;“${b.w}” 的同义词是 “${pb}”`);
+      setSWrongPair([sSel, i]); wrongFlow();
+      setTimeout(() => { setSWrongPair([]); setSSel(null); }, 480);
+      setTimeout(() => setSHint(null), 2400);
+    }
+  }
+
+  /* —— 固定搭配逻辑 —— */
+  function enterCollocation() { setScreen('collocation'); setColChosen(null); }
+  const colCur = COLLOCATIONS[colIndex];
+  function colNext() { setColIndex(i => (i + 1) % COLLOCATIONS.length); setColChosen(null); }
+  function colChoose(opt) {
+    if (colChosen) return;
+    setColChosen(opt);
+    if (opt === colCur.answer) { correctFlow(); setTimeout(() => { setColChosen(null); colNext(); }, 800); }
+    else { wrongFlow(); }   // 答错:展示正确搭配+释义,手动继续
+  }
+
+  /* —— 作文模板逻辑(背诵卡) —— */
+  function enterTemplates() { setScreen('templates'); setTmplReveal(false); }
+  function tmplGoNext() { setTmplIdx(i => (i + 1) % ESSAY_TEMPLATES.length); setTmplReveal(false); }
+  function tmplMark() {   // 记住了 → 标记已背 + 奖励
+    setTmplDone(a => { const n = a.slice(); n[tmplIdx] = true; return n; });
+    correctFlow();
+    setTimeout(tmplGoNext, 450);
+  }
+
+  /* —— 作文构思逻辑(骨架排序,steps 唯一 → 按原始下标判对) —— */
+  function enterOutline() { setScreen('outline'); setOPicked([]); setOShowWrong(false); setOShuffle(shuffleOutline(oIndex)); }
+  const oCur = ESSAY_OUTLINES[oIndex];
+  function oNext() {
+    setOIndex(i => { const ni = (i + 1) % ESSAY_OUTLINES.length; setOShuffle(shuffleOutline(ni)); return ni; });
+    setOPicked([]); setOShowWrong(false);
+  }
+  function oRetry() { setOShowWrong(false); setOPicked([]); }
+  function oPick(pos) {
+    if (oShowWrong) return;
+    const np = [...oPicked, pos];
+    setOPicked(np);
+    if (np.length === oCur.steps.length) {
+      const ok = np.every((p, idx) => oShuffle[p].oi === idx);
+      if (ok) { correctFlow(); setTimeout(oNext, 820); }
+      else { wrongFlow(); setOShowWrong(true); }
+    }
+  }
+  function oUndo() { if (oShowWrong) return; setOPicked(p => p.slice(0, -1)); }
+
+  /* ====================== 渲染 ====================== */
+  if (disguise) return Disguise();
+
+  return h('div', { key: 'app', style: { maxWidth: '500px', margin: '0 auto', padding: '0 16px 40px', position: 'relative', minHeight: '100vh' } },
+    Header({ todayCount, combo }),
+    // 叠加层:固定槽位,内容增删不影响主体布局
+    h('div', { key: 'overlay' },
+      fx === 'correct' && ParticleBurst({ combo }),
+      comboMsg && ComboBanner({ comboMsg }),
+      combo >= 5 && EdgeGlow({ strong: combo >= 10 })
+    ),
+    // 屏幕层:key 随模式变化 → 仅切换模式时重建(播放入场动画),屏幕内操作只做增量更新
+    h('div', { key: 'screen-' + screen },
+      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, pLit, tmplDone }),
+      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx }),
+      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx }),
+      screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
+      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx }),
+      screen === 'templates' && Templates({ tmplIdx, tmplReveal, tmplDone, setTmplReveal, tmplMark, tmplGoNext, setScreen, fx }),
+      screen === 'outline' && Outline({ oCur, oIndex, oShuffle, oPicked, oShowWrong, oPick, oUndo, oRetry, oNext, setScreen, fx })
+    )
+  );
+}
+
+function makeShuffle(i) {
+  return shuffle(TRANSLATIONS[i].tokens.map((w, oi) => ({ w, oi })));
+}
+function shuffleOutline(i) {
+  return shuffle(ESSAY_OUTLINES[i].steps.map((w, oi) => ({ w, oi })));
+}
+
+/* ============================================================
+   头部
+   ============================================================ */
+function Header({ todayCount, combo }) {
+  return h('div', { style: {
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '16px 4px 14px', position: 'sticky', top: 0, zIndex: 5,
+      background: 'linear-gradient(180deg, #faf7ff 72%, rgba(250,247,255,0))'
+    } },
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+      h('span', { style: { fontSize: '13px', color: MUTED } }, '今日已练'),
+      h('span', { style: { fontSize: '22px', fontWeight: '800', color: DEEP, fontVariantNumeric: 'tabular-nums' } }, String(todayCount)),
+      h('span', { style: { fontSize: '13px', color: MUTED } }, '题')
+    ),
+    h('div', { style: {
+        display: 'flex', alignItems: 'center', gap: '6px',
+        padding: '5px 14px', borderRadius: '999px',
+        border: combo > 0 ? '1px solid rgba(124,58,237,0.45)' : '1px solid rgba(139,127,176,0.25)',
+        background: combo > 0 ? 'rgba(124,58,237,0.08)' : 'transparent',
+        boxShadow: combo >= 5 ? '0 0 16px rgba(168,85,247,0.4)' : 'none'
+      } },
+      h('span', { style: { fontSize: '16px' } }, combo >= 10 ? '⚡' : combo >= 5 ? '✨' : '🔥'),
+      h('span', { style: { fontSize: '13px', color: MUTED } }, '连击'),
+      h('span', { style: { fontSize: '20px', fontWeight: '800', color: combo > 0 ? PURPLE : MUTED, fontVariantNumeric: 'tabular-nums' } }, String(combo))
+    )
+  );
+}
+
+/* ============================================================
+   主菜单
+   ============================================================ */
+function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, pLit, tmplDone }) {
+  const litCount = pLit.filter(Boolean).length;
+  const tmplCount = tmplDone.filter(Boolean).length;
+  const cards = [
+    { icon: '🀄', title: '翻译速拼', desc: '中译英 · 词块排序 · 攻克高频句式', accent: '#7c3aed', onClick: enterTranslate, badge: `${TRANSLATIONS.length} 句` },
+    { icon: '🔗', title: '同义替换', desc: '阅读高频换词 · 配对消除练题感', accent: '#db2777', onClick: enterSynonym, badge: `${SYNONYM_BATCHES.length} 批` },
+    { icon: '🧩', title: '固定搭配', desc: '高频搭配快闪 · 写作阅读通吃', accent: '#f59e0b', onClick: enterCollocation, badge: `${COLLOCATIONS.length} 题` },
+    { icon: '💡', title: '句式点亮', desc: '作文高级句式 · 点亮句库', accent: '#0ea5e9', onClick: enterPattern, badge: `${litCount}/${PATTERNS.length} 已点亮` },
+    { icon: '📝', title: '作文模板', desc: '万能句式背诵卡 · 攒作文弹药', accent: '#8b5cf6', onClick: enterTemplates, badge: `已背 ${tmplCount}/${ESSAY_TEMPLATES.length}` },
+    { icon: '🏗️', title: '作文构思', desc: '议论文骨架 · 逻辑顺序排列', accent: '#ef4444', onClick: enterOutline, badge: `${ESSAY_OUTLINES.length} 题` },
+  ];
+  return h('div', { style: { animation: 'riseIn .4s ease-out' } },
+    h('div', { style: { textAlign: 'center', margin: '6px 0 26px' } },
+      h('div', { style: { fontSize: '30px', fontWeight: '900', letterSpacing: '4px',
+          background: `linear-gradient(180deg, ${BRIGHT}, ${DEEP})`,
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          textShadow: '0 2px 14px rgba(124,58,237,0.18)' } }, '六级冲刺'),
+      h('div', { style: { fontSize: '13px', color: MUTED, marginTop: '8px', letterSpacing: '2px' } }, '作文 + 翻译 · 高 ROI 突击')
+    ),
+    ...cards.map(c =>
+      h('button', { onClick: c.onClick, style: {
+          display: 'block', width: '100%', textAlign: 'left', marginBottom: '16px',
+          padding: '20px', borderRadius: '18px', border: BORDER, background: PANEL,
+          color: INK, position: 'relative', overflow: 'hidden', boxShadow: SHADOW
+        } },
+        h('div', { style: { position: 'absolute', right: '-20px', top: '-20px', width: '90px', height: '90px',
+            borderRadius: '50%', background: `radial-gradient(circle, ${c.accent}22, transparent 70%)` } }),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } },
+          h('div', { style: { fontSize: '38px', lineHeight: 1 } }, c.icon),
+          h('div', { style: { flex: 1 } },
+            h('div', { style: { fontSize: '21px', fontWeight: '800', color: DEEP } }, c.title),
+            h('div', { style: { fontSize: '13px', color: MUTED, marginTop: '5px', lineHeight: 1.4 } }, c.desc)
+          ),
+          h('div', { style: { fontSize: '20px', color: c.accent } }, '›')
+        ),
+        h('div', { style: { marginTop: '12px', fontSize: '12px', color: c.accent, fontWeight: '700',
+            display: 'inline-block', padding: '3px 10px', borderRadius: '999px',
+            background: c.accent + '14' } }, c.badge)
+      )
+    ),
+    h('div', { style: { textAlign: 'center', marginTop: '24px', padding: '18px',
+        borderRadius: '16px', border: '1px dashed rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.04)' } },
+      h('div', { style: { fontSize: '15px', color: DEEP, fontWeight: '700', lineHeight: 1.6 } },
+        '“四天足以点亮一座弹药库。”'),
+      h('div', { style: { marginTop: '12px', fontSize: '14px', color: MUTED } },
+        '距 6 月 13 日考试还有 ',
+        h('span', { style: { fontSize: '26px', fontWeight: '900', color: PURPLE, margin: '0 4px', fontVariantNumeric: 'tabular-nums' } }, String(daysToExam())),
+        ' 天'),
+      h('div', { style: { marginTop: '10px', fontSize: '11px', color: MUTED } }, '提示:任意界面按 ESC 一键伪装成代码编辑器')
+    )
+  );
+}
+
+/* ============================================================
+   模式①:翻译速拼
+   ============================================================ */
+function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx }) {
+  const pickedSet = new Set(tPicked);
+  // 第一个语序错误位置:按单词文本比较(相同的词换序不算错)
+  const firstWrong = tShowWrong ? tPicked.findIndex((p, idx) => tShuffle[p].w !== tCur.tokens[idx]) : -1;
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '翻译速拼', sub: `第 ${tIndex + 1} / ${TRANSLATIONS.length}`, setScreen }),
+    h('div', { style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '16px', boxShadow: SHADOW } },
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '8px' } }, '中文'),
+      h('div', { style: { fontSize: '20px', lineHeight: 1.7, color: INK, fontWeight: '600' } }, tCur.zh)
+    ),
+    // 答题区
+    h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
+      style: {
+        minHeight: '72px', padding: '14px', borderRadius: '14px',
+        border: tShowWrong ? '1px solid rgba(220,38,38,0.5)' : BORDER,
+        background: tShowWrong ? 'rgba(220,38,38,0.04)' : 'rgba(124,58,237,0.04)', marginBottom: '16px',
+        display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start'
+      } },
+      tPicked.length === 0
+        ? h('span', { style: { color: MUTED, fontSize: '14px', alignSelf: 'center' } }, '点下方词块拼句,点已选词块可撤回')
+        : tPicked.map((p, idx) =>
+            h('button', { key: 'pk' + idx, onClick: () => idx === tPicked.length - 1 && undoBlock(),
+              style: {
+                padding: '9px 13px', borderRadius: '10px', fontSize: '16px', fontWeight: '700',
+                border: (idx === firstWrong) ? '1px solid ' + RED : '1px solid rgba(124,58,237,0.4)',
+                background: (idx === firstWrong) ? 'rgba(220,38,38,0.12)' : 'rgba(124,58,237,0.12)',
+                color: (idx === firstWrong) ? RED : DEEP
+              } }, tShuffle[p].w)
+          )
+    ),
+    // 答错解释面板
+    tShowWrong && h('div', { key: 'twrong', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '16px',
+        background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.3)' } },
+      h('div', { style: { fontSize: '13px', color: RED, fontWeight: '800', marginBottom: '8px' } }, '✗ 语序有误'),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '4px' } }, '正确答案'),
+      h('div', { style: { fontSize: '16px', color: INK, lineHeight: 1.6, fontWeight: '700', marginBottom: '10px' } },
+        tCur.tokens.join(' ')),
+      h('div', { style: { fontSize: '13px', color: INK, lineHeight: 1.7, padding: '10px 12px',
+          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + tCur.why),
+      h('div', { style: { display: 'flex', gap: '10px', marginTop: '12px' } },
+        h('button', { onClick: retryTranslate, style: smallBtn(false) }, '↺ 再拼一次'),
+        h('button', { onClick: nextSentence, style: smallBtn(true) }, '下一句 →')
+      )
+    ),
+    // 词块池
+    h('div', { key: 'tpool', style: { display: 'flex', flexWrap: 'wrap', gap: '10px' } },
+      tShuffle.map((blk, pos) =>
+        pickedSet.has(pos) ? null :
+        h('button', { key: 'bl' + pos, onClick: () => pickBlock(pos),
+          style: {
+            padding: '12px 16px', borderRadius: '12px', fontSize: '17px', fontWeight: '700',
+            border: BORDER, background: PANEL, color: DEEP, boxShadow: SHADOW,
+            opacity: tShowWrong ? 0.5 : 1
+          } }, blk.w)
+      )
+    )
+  );
+}
+
+/* ============================================================
+   模式②:句式点亮
+   ============================================================ */
+function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx }) {
+  const correct = pChosen && pChosen === pCur.answer;
+  const wrong = pChosen && pChosen !== pCur.answer;
+  const litExamples = PATTERNS.filter((_, i) => pLit[i]);
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '句式点亮', sub: `${pLit.filter(Boolean).length} / ${PATTERNS.length} 已点亮`, setScreen }),
+    h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
+      style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '14px', boxShadow: SHADOW } },
+      h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '10px', letterSpacing: '1px' } }, pCur.name),
+      h('div', { style: { fontSize: '20px', lineHeight: 1.7, color: INK, fontWeight: '600' } },
+        pCur.pre,
+        h('span', { style: {
+            display: 'inline-block', minWidth: '70px', textAlign: 'center', margin: '0 4px', padding: '2px 10px',
+            borderRadius: '8px', fontWeight: '800',
+            border: correct ? '1px solid ' + GREEN : wrong ? '1px solid ' + RED : '1px dashed rgba(124,58,237,0.5)',
+            background: correct ? 'rgba(22,163,74,0.12)' : wrong ? 'rgba(220,38,38,0.1)' : 'rgba(124,58,237,0.06)',
+            color: correct ? GREEN : wrong ? RED : PURPLE
+          } }, correct ? pCur.answer : (pChosen || '____')),
+        pCur.post
+      ),
+      h('div', { style: { marginTop: '14px', fontSize: '14px', color: MUTED } }, '💬 ' + pCur.tip)
+    ),
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' } },
+      pCur.options.map(opt => {
+        const isAns = pChosen && opt === pCur.answer;
+        const isBadPick = wrong && opt === pChosen;
+        return h('button', { key: opt, onClick: () => chooseOption(opt),
+          style: {
+            padding: '16px', borderRadius: '14px', fontSize: '18px', fontWeight: '700',
+            border: isAns ? '1px solid ' + GREEN : isBadPick ? '1px solid ' + RED : BORDER,
+            background: isAns ? 'rgba(22,163,74,0.12)' : isBadPick ? 'rgba(220,38,38,0.1)' : PANEL,
+            color: isAns ? GREEN : isBadPick ? RED : DEEP,
+            boxShadow: SHADOW
+          } }, opt);
+      })
+    ),
+    // 答错解释面板
+    wrong && h('div', { key: 'pwrong', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '16px',
+        background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.3)', animation: 'riseIn .25s ease-out' } },
+      h('div', { style: { fontSize: '13px', color: RED, fontWeight: '800', marginBottom: '6px' } },
+        `✗ 你选了 “${pChosen}”,正确答案是 “${pCur.answer}”`),
+      h('div', { style: { fontSize: '13px', color: INK, lineHeight: 1.7, padding: '10px 12px',
+          background: 'rgba(124,58,237,0.06)', borderRadius: '10px', marginBottom: '12px' } }, '💡 ' + pCur.why),
+      h('button', { onClick: nextPattern, style: smallBtn(true) }, '明白了,继续 →')
+    ),
+    // 我的句库
+    h('div', { key: 'plib', style: { padding: '16px', borderRadius: '16px', border: '1px solid rgba(14,165,233,0.3)', background: 'rgba(14,165,233,0.05)' } },
+      h('div', { style: { fontSize: '14px', fontWeight: '800', color: '#0284c7', marginBottom: '10px',
+          display: 'flex', justifyContent: 'space-between' } },
+        h('span', null, '📚 我的句库'),
+        h('span', { style: { color: '#0ea5e9', fontWeight: '600' } }, `${litExamples.length} 句`)),
+      litExamples.length === 0
+        ? h('div', { style: { fontSize: '13px', color: MUTED, lineHeight: 1.6 } }, '答对即点亮句式,完整例句会存入这里供背诵。目标:4 天点亮全部 12 句。')
+        : h('div', null, litExamples.map((p, i) =>
+            h('div', { key: 'lit' + i, style: {
+                fontSize: '13px', color: '#0c4a6e', lineHeight: 1.6, padding: '8px 0',
+                borderBottom: i < litExamples.length - 1 ? '1px solid rgba(14,165,233,0.18)' : 'none',
+                animation: 'litPop .3s ease-out' } },
+              h('span', { style: { color: '#0ea5e9', marginRight: '6px' } }, '✦'), p.full)
+          ))
+    )
+  );
+}
+
+/* ============================================================
+   模式③:同义替换
+   ============================================================ */
+function Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }) {
+  const rotations = [-4, 3, -2, 5, -5, 2, 4, -3];
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '同义替换', sub: `第 ${sBatch + 1} / ${SYNONYM_BATCHES.length} 批`, setScreen }),
+    h('div', { style: { fontSize: '13px', color: MUTED, textAlign: 'center', marginBottom: '14px' } },
+      '点击两个同义词配对 · 4 对全消即过关'),
+    // 答错提示
+    h('div', { style: {
+        minHeight: '20px', textAlign: 'center', marginBottom: '12px',
+        fontSize: '13px', fontWeight: '700', color: RED,
+        opacity: sHint ? 1 : 0, transition: 'opacity .2s' } }, sHint || ' '),
+    h('div', { style: {
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px',
+        minHeight: '300px', marginBottom: '20px'
+      } },
+      sOrder.map((idx, slot) => {
+        const word = sWords[idx];
+        const matched = sMatched[idx];
+        const selected = sSel === idx;
+        const wrong = sWrongPair.includes(idx);
+        if (matched) {
+          return h('div', { key: 'sc' + idx, style: {
+              padding: '22px 8px', borderRadius: '14px', textAlign: 'center',
+              border: '1px solid rgba(22,163,74,0.3)', background: 'rgba(22,163,74,0.08)',
+              opacity: 0.55, fontSize: '17px', color: GREEN, fontWeight: '700' } },
+            '✓ ' + word.w);
+        }
+        return h('button', { key: 'sc' + idx, onClick: () => tapCard(idx),
+          className: wrong ? 'fx-wrong' : '',
+          style: {
+            padding: '22px 8px', borderRadius: '14px', textAlign: 'center',
+            fontSize: '18px', fontWeight: '700',
+            transform: `rotate(${rotations[slot]}deg)`,
+            border: selected ? '2px solid ' + PURPLE : wrong ? '2px solid ' + RED : BORDER,
+            background: selected ? 'rgba(124,58,237,0.14)' : PANEL,
+            color: selected ? DEEP : wrong ? RED : INK,
+            boxShadow: selected ? '0 0 20px rgba(168,85,247,0.45)' : SHADOW
+          } }, word.w);
+      })
+    ),
+    sDone && h('div', { key: 'sdone', style: {
+        padding: '18px', borderRadius: '16px', textAlign: 'center', marginBottom: '16px',
+        border: '1px solid rgba(124,58,237,0.4)', background: 'rgba(124,58,237,0.08)',
+        animation: 'riseIn .4s ease-out' } },
+      h('div', { style: { fontSize: '16px', color: DEEP, fontWeight: '800' } }, '🎉 全部配对完成!'),
+      h('div', { style: { fontSize: '14px', color: MUTED, marginTop: '8px' } },
+        '用时 ', h('span', { style: { fontSize: '24px', fontWeight: '900', color: PURPLE } }, sElapsed.toFixed(1)), ' 秒')
+    ),
+    h('div', { key: 'sbtns', style: { display: 'flex', gap: '12px' } },
+      sDone && h('button', { onClick: () => newBatch((sBatch + 1) % SYNONYM_BATCHES.length),
+        style: bigBtn(true) }, '下一批 ›'),
+      h('button', { onClick: () => newBatch(Math.floor(Math.random() * SYNONYM_BATCHES.length)),
+        style: bigBtn(false) }, '🔀 换一批')
+    )
+  );
+}
+
+/* ============================================================
+   按钮样式
+   ============================================================ */
+function bigBtn(primary) {
+  return {
+    flex: 1, padding: '15px', borderRadius: '14px', fontSize: '16px', fontWeight: '800',
+    border: primary ? 'none' : BORDER,
+    background: primary ? 'linear-gradient(180deg, #a855f7, #7c3aed)' : PANEL,
+    color: primary ? '#fff' : PURPLE,
+    boxShadow: primary ? '0 4px 16px rgba(124,58,237,0.35)' : SHADOW
+  };
+}
+function smallBtn(primary) {
+  return {
+    flex: 1, padding: '11px', borderRadius: '11px', fontSize: '14px', fontWeight: '800',
+    border: primary ? 'none' : '1px solid rgba(124,58,237,0.3)',
+    background: primary ? 'linear-gradient(180deg, #a855f7, #7c3aed)' : '#fff',
+    color: primary ? '#fff' : PURPLE,
+    boxShadow: primary ? '0 3px 12px rgba(124,58,237,0.3)' : 'none'
+  };
+}
+
+/* ============================================================
+   子页头(标题 + 返回)
+   ============================================================ */
+function SubBar({ title, sub, setScreen }) {
+  return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 18px' } },
+    h('div', null,
+      h('div', { style: { fontSize: '22px', fontWeight: '900', color: DEEP } }, title),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginTop: '3px' } }, sub)
+    ),
+    h('button', { onClick: () => setScreen('menu'), style: {
+        padding: '10px 16px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
+        border: BORDER, background: PANEL, color: PURPLE, boxShadow: SHADOW } }, '‹ 菜单')
+  );
+}
+
+/* ============================================================
+   紫光碎裂粒子
+   ============================================================ */
+function ParticleBurst({ combo }) {
+  const n = combo >= 10 ? 22 : combo >= 5 ? 16 : 12;
+  const parts = [];
+  for (let i = 0; i < n; i++) {
+    const ang = (Math.PI * 2 * i) / n + Math.random() * 0.4;
+    const dist = 80 + Math.random() * (combo >= 10 ? 150 : 90);
+    parts.push(h('span', { key: 'p' + i, style: {
+        position: 'absolute', left: '50%', top: '50%', width: '10px', height: '10px',
+        marginLeft: '-5px', marginTop: '-5px', borderRadius: '2px',
+        background: `linear-gradient(135deg, ${BRIGHT}, ${PURPLE})`,
+        boxShadow: '0 0 8px rgba(168,85,247,0.9)',
+        '--tx': Math.cos(ang) * dist + 'px',
+        '--ty': Math.sin(ang) * dist + 'px',
+        '--rot': (Math.random() * 540 - 270) + 'deg',
+        animation: `shard ${0.6 + Math.random() * 0.3}s ease-out forwards`
+      } }));
+  }
+  return h('div', { key: 'burst', style: {
+      position: 'fixed', left: 0, right: 0, top: 0, bottom: 0,
+      pointerEvents: 'none', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+    h('div', { style: { position: 'relative', width: 0, height: 0 } },
+      h('div', { style: {
+          position: 'absolute', left: '50%', top: '50%', width: '60px', height: '60px',
+          marginLeft: '-30px', marginTop: '-30px', borderRadius: '50%',
+          border: `3px solid ${BRIGHT}`, animation: 'ringPulse .6s ease-out forwards' } }),
+      ...parts
+    )
+  );
+}
+
+/* ============================================================
+   连击横幅 / 边缘紫光
+   ============================================================ */
+function ComboBanner({ comboMsg }) {
+  return h('div', { key: 'cbanner', style: {
+      position: 'fixed', left: '50%', top: '38%', zIndex: 60, pointerEvents: 'none',
+      transform: 'translateX(-50%)', animation: 'comboBanner 1.4s ease-out forwards',
+      fontSize: '26px', fontWeight: '900', whiteSpace: 'nowrap',
+      color: PURPLE, textShadow: '0 0 22px rgba(168,85,247,0.7), 0 2px 5px rgba(255,255,255,0.8)'
+    } }, comboMsg);
+}
+function EdgeGlow({ strong }) {
+  return h('div', { key: 'edge', style: {
+      position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 4,
+      boxShadow: `inset 0 0 ${strong ? '120px' : '70px'} ${strong ? '18px' : '8px'} rgba(168,85,247,${strong ? 0.22 : 0.12})`,
+      animation: 'edgeGlow 2s ease-in-out infinite'
+    } });
+}
+
+/* ============================================================
+   模式④:固定搭配(快闪选择)
+   ============================================================ */
+function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx }) {
+  const correct = colChosen && colChosen === colCur.answer;
+  const wrong = colChosen && colChosen !== colCur.answer;
+  const parts = colCur.q.split('___');
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '固定搭配', sub: `第 ${colIndex + 1} / ${COLLOCATIONS.length}`, setScreen }),
+    h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
+      style: { padding: '28px 20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '16px', textAlign: 'center' } },
+      h('div', { style: { fontSize: '13px', color: MUTED, marginBottom: '14px' } }, colCur.cn),
+      h('div', { style: { fontSize: '24px', color: INK, fontWeight: '700', lineHeight: 1.6 } },
+        parts[0],
+        h('span', { style: { color: correct ? GREEN : wrong ? RED : PURPLE, fontWeight: '800', padding: '0 4px' } },
+          correct ? colCur.answer : (colChosen || '____')),
+        parts[1] || '')
+    ),
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' } },
+      colCur.options.map(opt => {
+        const isAns = colChosen && opt === colCur.answer;
+        const isBad = wrong && opt === colChosen;
+        return h('button', { key: opt, onClick: () => colChoose(opt),
+          style: {
+            padding: '16px', borderRadius: '14px', fontSize: '18px', fontWeight: '700',
+            border: isAns ? '1px solid ' + GREEN : isBad ? '1px solid ' + RED : BORDER,
+            background: isAns ? 'rgba(22,163,74,0.12)' : isBad ? 'rgba(220,38,38,0.1)' : PANEL,
+            color: isAns ? GREEN : isBad ? RED : DEEP, boxShadow: SHADOW
+          } }, opt);
+      })
+    ),
+    wrong && h('div', { key: 'colwrong', style: {
+        padding: '14px', borderRadius: '14px', background: 'rgba(220,38,38,0.05)',
+        border: '1px solid rgba(220,38,38,0.3)', animation: 'riseIn .25s ease-out' } },
+      h('div', { style: { fontSize: '15px', color: RED, fontWeight: '800', marginBottom: '8px' } },
+        '正确搭配:' + colCur.q.replace('___', colCur.answer)),
+      h('div', { style: { fontSize: '13px', color: INK, marginBottom: '12px' } }, '释义:' + colCur.cn),
+      h('button', { onClick: colNext, style: smallBtn(true) }, '继续 →')
+    )
+  );
+}
+
+/* ============================================================
+   模式⑤:作文模板(背诵卡)
+   ============================================================ */
+function Templates({ tmplIdx, tmplReveal, tmplDone, setTmplReveal, tmplMark, tmplGoNext, setScreen, fx }) {
+  const cur = ESSAY_TEMPLATES[tmplIdx];
+  const done = tmplDone.filter(Boolean).length;
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '作文模板', sub: `已背 ${done} / ${ESSAY_TEMPLATES.length} · 第 ${tmplIdx + 1} 张`, setScreen }),
+    h('div', { className: fx === 'correct' ? 'fx-correct' : '',
+      style: { padding: '22px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '16px', minHeight: '210px' } },
+      h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '14px' } },
+        '【' + cur.cat + '】' + (tmplDone[tmplIdx] ? '  ✓ 已背' : '')),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '中文功能'),
+      h('div', { style: { fontSize: '18px', color: INK, fontWeight: '600', lineHeight: 1.6, marginBottom: '18px' } }, cur.zh),
+      tmplReveal
+        ? h('div', { key: 'reveal' },
+            h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '英文模板(默写记忆)'),
+            h('div', { style: { fontSize: '17px', color: DEEP, fontWeight: '700', lineHeight: 1.7,
+                padding: '12px 14px', background: 'rgba(124,58,237,0.06)', borderRadius: '12px' } }, cur.en))
+        : h('div', { key: 'hidden', style: { textAlign: 'center', padding: '22px 0' } },
+            h('button', { onClick: () => setTmplReveal(true), style: bigBtn(true) }, '👁  显示模板'))
+    ),
+    tmplReveal && h('div', { key: 'tmplbtns', style: { display: 'flex', gap: '12px' } },
+      h('button', { onClick: tmplGoNext, style: bigBtn(false) }, '↻ 再背一次'),
+      h('button', { onClick: tmplMark, style: bigBtn(true) }, '✓ 记住了')
+    )
+  );
+}
+
+/* ============================================================
+   模式⑥:作文构思(议论文骨架排序)
+   ============================================================ */
+function Outline({ oCur, oIndex, oShuffle, oPicked, oShowWrong, oPick, oUndo, oRetry, oNext, setScreen, fx }) {
+  const pickedSet = new Set(oPicked);
+  const firstWrong = oShowWrong ? oPicked.findIndex((p, idx) => oShuffle[p].oi !== idx) : -1;
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '作文构思', sub: `第 ${oIndex + 1} / ${ESSAY_OUTLINES.length} · 骨架排序`, setScreen }),
+    h('div', { style: { padding: '18px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '作文题目'),
+      h('div', { style: { fontSize: '19px', color: INK, fontWeight: '700' } }, oCur.topic),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginTop: '8px' } }, '按写作逻辑顺序点击下方提纲(引入 → 论证 → 结论)')
+    ),
+    // 答题区(已排序)
+    h('div', { key: 'oans', className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
+      style: { minHeight: '60px', padding: '12px', borderRadius: '14px',
+        border: oShowWrong ? '1px solid rgba(220,38,38,0.5)' : BORDER,
+        background: 'rgba(124,58,237,0.04)', marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px' } },
+      oPicked.length === 0
+        ? h('span', { style: { color: MUTED, fontSize: '14px' } }, '点下方提纲按顺序排列,点最后一项可撤回')
+        : oPicked.map((p, idx) =>
+            h('button', { key: 'op' + idx, onClick: () => idx === oPicked.length - 1 && oUndo(),
+              style: { textAlign: 'left', padding: '11px 13px', borderRadius: '10px', fontSize: '15px', fontWeight: '600',
+                border: idx === firstWrong ? '1px solid ' + RED : '1px solid rgba(124,58,237,0.4)',
+                background: idx === firstWrong ? 'rgba(220,38,38,0.1)' : 'rgba(124,58,237,0.1)',
+                color: idx === firstWrong ? RED : DEEP } }, (idx + 1) + '. ' + oShuffle[p].w))
+    ),
+    oShowWrong && h('div', { key: 'owrong', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '14px',
+        background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.3)' } },
+      h('div', { style: { fontSize: '13px', color: RED, fontWeight: '800', marginBottom: '8px' } }, '✗ 逻辑顺序有误'),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '正确骨架(议论文常用结构)'),
+      ...oCur.steps.map((s, i) => h('div', { key: 'os' + i, style: { fontSize: '14px', color: INK, lineHeight: 1.8 } }, (i + 1) + '. ' + s)),
+      h('div', { style: { display: 'flex', gap: '10px', marginTop: '12px' } },
+        h('button', { onClick: oRetry, style: smallBtn(false) }, '↺ 再排一次'),
+        h('button', { onClick: oNext, style: smallBtn(true) }, '下一题 →'))
+    ),
+    h('div', { key: 'opool', style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+      oShuffle.map((blk, pos) =>
+        pickedSet.has(pos) ? null :
+        h('button', { key: 'ob' + pos, onClick: () => oPick(pos),
+          style: { textAlign: 'left', padding: '14px', borderRadius: '12px', fontSize: '15px', fontWeight: '600',
+            border: BORDER, background: PANEL, color: DEEP, boxShadow: SHADOW, opacity: oShowWrong ? 0.5 : 1 } }, blk.w)
+      )
+    )
+  );
+}
+
+/* ============================================================
+   摸鱼伪装:假代码编辑器(保持深色,更像真在工作)
+   ============================================================ */
+function Disguise() {
+  const lines = [
+    { t: '// auth-service.ts — refactor token refresh flow', c: '#6a9955' },
+    { t: "import { Logger } from '../utils/logger';", c: '#d4d4d4' },
+    { t: "import { api } from '../core/http';", c: '#d4d4d4' },
+    { t: '', c: '#d4d4d4' },
+    { t: 'export async function refreshSession(token: string) {', c: '#dcdcaa' },
+    { t: "  const logger = new Logger('auth');", c: '#d4d4d4' },
+    { t: '  try {', c: '#c586c0' },
+    { t: "    const res = await api.post('/v2/refresh', { token });", c: '#d4d4d4' },
+    { t: "    if (!res.ok) throw new Error('refresh failed');", c: '#d4d4d4' },
+    { t: '    return res.data.accessToken;', c: '#d4d4d4' },
+    { t: '  } catch (e) {', c: '#c586c0' },
+    { t: "    logger.warn('session expired, retrying...');", c: '#d4d4d4' },
+    { t: '    return null;', c: '#d4d4d4' },
+    { t: '  }', c: '#d4d4d4' },
+    { t: '}', c: '#d4d4d4' },
+    { t: '', c: '#d4d4d4' },
+    { t: '// TODO: add exponential backoff for retry attempts', c: '#6a9955' },
+    { t: '// FIXME: handle concurrent refresh race condition', c: '#6a9955' },
+  ];
+  return h('div', { key: 'disguise', style: {
+      position: 'fixed', inset: 0, background: '#1e1e1e', zIndex: 100,
+      fontFamily: 'Consolas, "Courier New", monospace', userSelect: 'text' } },
+    h('div', { style: { display: 'flex', background: '#252526', height: '36px', alignItems: 'flex-end' } },
+      h('div', { style: { background: '#1e1e1e', color: '#d4d4d4', fontSize: '13px',
+          padding: '8px 16px', borderTop: '1px solid #007acc', display: 'flex', gap: '8px', alignItems: 'center' } },
+        h('span', { style: { color: '#519aba' } }, '⬡'), 'auth-service.ts',
+        h('span', { style: { color: '#858585', marginLeft: '4px' } }, '●')),
+      h('div', { style: { background: '#252526', color: '#858585', fontSize: '13px', padding: '8px 16px' } }, 'logger.ts'),
+      h('div', { style: { background: '#252526', color: '#858585', fontSize: '13px', padding: '8px 16px' } }, 'http.ts')
+    ),
+    h('div', { style: { color: '#858585', fontSize: '12px', padding: '4px 16px', background: '#1e1e1e' } },
+      'src › core › auth › auth-service.ts'),
+    h('div', { style: { padding: '8px 0', fontSize: '14px', lineHeight: '21px' } },
+      lines.map((ln, i) =>
+        h('div', { key: 'ln' + i, style: { display: 'flex' } },
+          h('span', { style: { color: '#858585', width: '44px', textAlign: 'right', paddingRight: '16px', flexShrink: 0, userSelect: 'none' } }, String(i + 1)),
+          h('span', { style: { color: ln.c, whiteSpace: 'pre' } }, ln.t || ' '),
+          i === 9 && h('span', { style: { color: '#aeafad', animation: 'cursorBlink 1s step-end infinite' } }, '▏')
+        )
+      )
+    ),
+    h('div', { style: { position: 'fixed', bottom: 0, left: 0, right: 0, height: '24px',
+        background: '#007acc', color: '#fff', fontSize: '12px',
+        display: 'flex', alignItems: 'center', padding: '0 12px', gap: '16px' } },
+      h('span', null, '⎇ main'),
+      h('span', null, '✓ 0   ⚠ 0'),
+      h('span', { style: { marginLeft: 'auto' } }, 'Ln 10, Col 32'),
+      h('span', null, 'TypeScript'),
+      h('span', null, 'UTF-8')
+    )
+  );
+}
+
+/* 启动 */
+doRender();
+</script>
+</body>
+</html>
