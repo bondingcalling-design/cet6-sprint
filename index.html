@@ -109,6 +109,7 @@ function setProp(el, k, ov, nv) {
   if (k === 'key' || k === 'ref') return;
   if (k === 'style') { updateStyle(el, ov || {}, nv || {}); return; }
   if (k === 'className') { if (nv !== ov) el.className = nv || ''; return; }
+  if (k === 'value') { const v = nv == null ? '' : nv; if (el.value !== v) el.value = v; return; }  // 受控输入:走 .value 属性
   if (k.startsWith('on')) {
     const ev = k.slice(2).toLowerCase();
     el._handlers = el._handlers || {};
@@ -310,6 +311,30 @@ const TRANSLATIONS = [
   { zh: "这位杰出的科学家被誉为现代农业的奠基人。",
     tokens: ["This", "outstanding", "scientist", "is", "hailed", "as", "the", "founder", "of", "modern", "agriculture."],
     why: "考点:「被誉为」is hailed as(高级表达,优于 is called);「奠基人」the founder of。" },
+  { zh: "中国在人工智能领域取得了举世瞩目的成就。",
+    tokens: ["China", "has", "made", "remarkable", "achievements", "in", "the", "field", "of", "artificial", "intelligence."],
+    why: "考点:现在完成时「取得成就」have/has made achievements;「在……领域」in the field of。" },
+  { zh: "春节是中国最重要的传统节日。",
+    tokens: ["The", "Spring", "Festival", "is", "the", "most", "important", "traditional", "festival", "in", "China."],
+    why: "考点:最高级 the most important;形容词顺序「重要的+传统的」important traditional。" },
+  { zh: "这些由志愿者修建的图书馆惠及了偏远山区的儿童。",
+    tokens: ["The", "libraries", "built", "by", "volunteers", "have", "benefited", "children", "in", "remote", "mountainous", "areas."],
+    why: "考点:过去分词作后置定语 built by volunteers(=which were built by);主句现在完成时 have benefited。" },
+  { zh: "近年来,中国的电子商务发展迅猛。",
+    tokens: ["In", "recent", "years,", "e-commerce", "in", "China", "has", "developed", "rapidly."],
+    why: "考点:「近年来」In recent years 常配现在完成时;副词 rapidly 修饰动词,置于句末。" },
+  { zh: "只有通过不懈的努力,我们才能取得成功。",
+    tokens: ["Only", "through", "constant", "efforts", "can", "we", "achieve", "success."],
+    why: "考点:Only + 状语置于句首引起部分倒装:can we achieve(助动词提前);不倒装即错。" },
+  { zh: "与十年前相比,人们的生活水平有了显著提高。",
+    tokens: ["Compared", "with", "ten", "years", "ago,", "people's", "living", "standards", "have", "improved", "significantly."],
+    why: "考点:过去分词短语作状语 Compared with…;「显著提高」have improved significantly。" },
+  { zh: "政府投入大量资金以改善农村的基础设施。",
+    tokens: ["The", "government", "has", "invested", "a", "great", "deal", "of", "money", "to", "improve", "rural", "infrastructure."],
+    why: "考点:「大量(修饰不可数)」a great deal of + money;不定式 to improve 表目的。" },
+  { zh: "我们应该采取切实可行的措施来减少污染。",
+    tokens: ["We", "should", "take", "practical", "measures", "to", "reduce", "pollution."],
+    why: "考点:「采取措施做某事」take measures to do;practical「切实可行的」。" },
 ];
 
 // 模式②:句式点亮(why = 为什么选它 / 其它选项为何错)
@@ -379,6 +404,26 @@ const PATTERNS = [
     options: ["who", "which", "whom", "whose"], answer: "who",
     full: "Those who work hard will eventually be rewarded. — 那些努力奋斗的人终将获得回报。",
     why: "Those who… = “…的人”,who 指代人且在从句中作主语。which 指物;whom 作宾语;whose 表所属,均不符。" },
+  { name: "Not until ... 倒装", tip: "直到失败他才意识到时间的重要(填助动词)",
+    pre: "Not until he failed ", blank: "did", post: " he realize the importance of time.",
+    options: ["did", "had", "does", "was"], answer: "did",
+    full: "Not until he failed did he realize the importance of time. — 直到失败,他才意识到时间的重要。",
+    why: "Not until 置于句首,主句须部分倒装:助动词 did + 主语 + 动词原形(realize)。had 时态不符;does 与过去语境矛盾;was 不搭配实义动词。" },
+  { name: "What 引导主语从句", tip: "最重要的是你的态度(填引导词)",
+    pre: "", blank: "What", post: " matters most is your attitude.",
+    options: ["What", "That", "Which", "It"], answer: "What",
+    full: "What matters most is your attitude. — 最重要的是你的态度。",
+    why: "主语从句缺主语,用 What(= the thing that)引导并在从句中作主语。That 引导的从句不缺成分;Which 多用于选择;It 是代词不能引导从句。" },
+  { name: "as if 虚拟语气", tip: "他说得好像无所不知(填动词形式)",
+    pre: "He talks as if he ", blank: "knew", post: " everything.",
+    options: ["knew", "knows", "know", "had known"], answer: "knew",
+    full: "He talks as if he knew everything. — 他说起话来好像无所不知。",
+    why: "as if 引导与现在事实相反的虚拟,从句用一般过去时(knew)。knows/know 是陈述事实;had known 表与过去相反,此处不符。" },
+  { name: "be (well) worth doing", tip: "这本书很值得再读一遍(填动词形式)",
+    pre: "The book is well worth ", blank: "reading", post: " again.",
+    options: ["reading", "to read", "read", "being read"], answer: "reading",
+    full: "The book is well worth reading again. — 这本书很值得再读一遍。",
+    why: "be worth + 动名词(doing),主动形式表被动含义。to read / read / being read 均不符合 be worth doing 的固定搭配。" },
 ];
 
 // 模式③:同义替换(阅读高频)
@@ -390,6 +435,9 @@ const SYNONYM_BATCHES = [
   [["huge", "enormous"], ["fast", "rapid"], ["get", "gain"], ["idea", "notion"]],
   [["protect", "safeguard"], ["change", "alter"], ["rich", "wealthy"], ["smart", "intelligent"]],
   [["clear", "evident"], ["hard", "arduous"], ["allow", "permit"], ["beautiful", "gorgeous"]],
+  [["maintain", "sustain"], ["reveal", "disclose"], ["essential", "vital"], ["typical", "representative"]],
+  [["abundant", "plentiful"], ["evident", "obvious"], ["consequence", "outcome"], ["fundamental", "basic"]],
+  [["promote", "foster"], ["restrict", "limit"], ["accurate", "precise"], ["genuine", "authentic"]],
 ];
 
 // 模式④:固定搭配(高频搭配快闪,写作/阅读通吃)
@@ -412,6 +460,18 @@ const COLLOCATIONS = [
   { q: "adapt ___ the new environment", options: ["to", "with", "for", "in"], answer: "to", cn: "适应新环境" },
   { q: "be addicted ___ online games", options: ["to", "in", "on", "with"], answer: "to", cn: "沉迷于网络游戏" },
   { q: "play a vital ___ in society", options: ["role", "act", "place", "duty"], answer: "role", cn: "在社会中起重要作用" },
+  { q: "be capable ___ solving it", options: ["of", "to", "for", "with"], answer: "of", cn: "有能力解决它" },
+  { q: "focus ___ the main goal", options: ["on", "at", "in", "to"], answer: "on", cn: "专注于主要目标" },
+  { q: "with ___ to this issue", options: ["regard", "regards", "regarding", "regarded"], answer: "regard", cn: "关于这个问题" },
+  { q: "be in charge ___ the project", options: ["of", "for", "with", "to"], answer: "of", cn: "负责这个项目" },
+  { q: "This will result ___ failure", options: ["in", "from", "to", "of"], answer: "in", cn: "这将导致失败" },
+  { q: "The flood resulted ___ heavy rain", options: ["from", "in", "to", "of"], answer: "from", cn: "洪水由暴雨造成" },
+  { q: "___ no means an easy task", options: ["By", "In", "At", "For"], answer: "By", cn: "绝非易事" },
+  { q: "for the ___ of success", options: ["sake", "aim", "reason", "cause"], answer: "sake", cn: "为了成功" },
+  { q: "prior ___ the deadline", options: ["to", "than", "of", "for"], answer: "to", cn: "在截止日期之前" },
+  { q: "be accustomed ___ getting up early", options: ["to", "with", "of", "in"], answer: "to", cn: "习惯于早起" },
+  { q: "be subject ___ frequent change", options: ["to", "of", "for", "with"], answer: "to", cn: "易于频繁变化" },
+  { q: "in ___ with the rules", options: ["accordance", "line", "touch", "charge"], answer: "accordance", cn: "按照规则" },
 ];
 
 // 模式⑤:作文模板(万能句式背诵卡)
@@ -432,6 +492,14 @@ const ESSAY_TEMPLATES = [
   { cat: "结尾", zh: "只有这样,我们才能……。", en: "Only in this way can we ..." },
   { cat: "图表数据", zh: "如图所示,……发生了显著变化。", en: "As is clearly shown in the chart, ... has changed dramatically." },
   { cat: "图表数据", zh: "数据表明,……呈上升 / 下降趋势。", en: "The data indicate that ... has been on the rise / on the decline." },
+  { cat: "开头", zh: "毫无疑问,……在我们的日常生活中扮演着越来越重要的角色。", en: "Undoubtedly, ... plays an increasingly important role in our daily life." },
+  { cat: "开头", zh: "最近,一幅发人深省的漫画引起了广泛关注。", en: "Recently, a thought-provoking cartoon has captured widespread attention." },
+  { cat: "亮明观点", zh: "在我看来,利远大于弊。", en: "From my perspective, the advantages far outweigh the disadvantages." },
+  { cat: "过渡", zh: "换句话说,……。", en: "In other words, ..." },
+  { cat: "举例论证", zh: "正如一句古老的谚语所说,……。", en: "As an old saying goes, ..." },
+  { cat: "原因影响", zh: "一方面,……;另一方面,……。", en: "On the one hand, ...; on the other hand, ..." },
+  { cat: "结尾", zh: "我们有充分的理由相信,未来将更加美好。", en: "We have every reason to believe that the future will be even brighter." },
+  { cat: "结尾", zh: "为实现这一目标,个人、学校与社会应共同努力。", en: "To achieve this goal, individuals, schools and society should make joint efforts." },
 ];
 
 // 模式⑥:作文构思(议论文骨架逻辑排序,steps 已按正确顺序)
@@ -442,6 +510,10 @@ const ESSAY_OUTLINES = [
   { topic: "Protecting Tradition 传统文化保护", steps: ["背景:全球化下传统文化受到冲击", "意义:文化是民族认同的根基", "措施:加强教育与创新传播", "结论:保护传统文化人人有责"] },
   { topic: "Volunteering 志愿服务", steps: ["现象:志愿服务日益普及", "对个人:帮助他人、实现自我价值", "对社会:传递正能量、促进和谐", "呼吁:积极投身志愿活动"] },
   { topic: "Artificial Intelligence 人工智能", steps: ["趋势:AI 正深刻改变各行各业", "机遇:提升效率、解放人力", "挑战:就业冲击与伦理风险", "态度:理性拥抱,趋利避害"] },
+  { topic: "Environmental Protection 环境保护", steps: ["现象:环境问题日益严峻", "危害:威胁健康与可持续发展", "原因:过度开发与资源浪费", "对策:绿色出行、节约资源,人人有责"] },
+  { topic: "Importance of Reading 阅读的重要性", steps: ["观点:阅读对个人成长至关重要", "益处一:拓宽视野、增长知识", "益处二:陶冶情操、提升思辨", "建议:养成每日阅读的习惯"] },
+  { topic: "Innovation 创新的意义", steps: ["背景:创新是时代发展的核心动力", "对国家:提升综合竞争力", "对个人:创造更多机遇", "结论:应培养创新意识与能力"] },
+  { topic: "Work-Life Balance 平衡工作与生活", steps: ["现象:快节奏下许多人忽视生活", "问题:长期失衡损害身心健康", "原因:竞争压力与时间管理不当", "建议:合理规划,劳逸结合"] },
 ];
 
 /* ============================================================
@@ -502,9 +574,10 @@ function App() {
   const [colIndex, setColIndex] = useState(0);
   const [colChosen, setColChosen] = useState(null);
 
-  // —— 作文模板
+  // —— 作文模板(默写检查)
   const [tmplIdx, setTmplIdx] = useState(0);
-  const [tmplReveal, setTmplReveal] = useState(false);
+  const [tmplInput, setTmplInput] = useState('');
+  const [tmplChecked, setTmplChecked] = useState(false);
   const [tmplDone, setTmplDone] = useState(() => Array(ESSAY_TEMPLATES.length).fill(false));
 
   // —— 作文构思
@@ -634,13 +707,20 @@ function App() {
     else { wrongFlow(); }   // 答错:展示正确搭配+释义,手动继续
   }
 
-  /* —— 作文模板逻辑(背诵卡) —— */
-  function enterTemplates() { setScreen('templates'); setTmplReveal(false); }
-  function tmplGoNext() { setTmplIdx(i => (i + 1) % ESSAY_TEMPLATES.length); setTmplReveal(false); }
-  function tmplMark() {   // 记住了 → 标记已背 + 奖励
+  /* —— 作文模板逻辑(默写检查) —— */
+  function enterTemplates() { setScreen('templates'); setTmplInput(''); setTmplChecked(false); }
+  function tmplGoNext() { setTmplIdx(i => (i + 1) % ESSAY_TEMPLATES.length); setTmplInput(''); setTmplChecked(false); }
+  function tmplCheck() {
+    if (!tmplInput.trim()) return;
+    setTmplChecked(true);
+    const ok = normTmpl(tmplInput) === normTmpl(ESSAY_TEMPLATES[tmplIdx].en);
+    if (ok) { setTmplDone(a => { const n = a.slice(); n[tmplIdx] = true; return n; }); correctFlow(); }
+    else { wrongFlow(); }
+  }
+  function tmplRetry() { setTmplChecked(false); setTmplInput(''); }
+  function tmplMark() {   // 默写有出入但自认掌握 → 手动标记已背
     setTmplDone(a => { const n = a.slice(); n[tmplIdx] = true; return n; });
-    correctFlow();
-    setTimeout(tmplGoNext, 450);
+    tmplGoNext();
   }
 
   /* —— 作文构思逻辑(骨架排序,steps 唯一 → 按原始下标判对) —— */
@@ -681,7 +761,7 @@ function App() {
       screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx }),
       screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
       screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx }),
-      screen === 'templates' && Templates({ tmplIdx, tmplReveal, tmplDone, setTmplReveal, tmplMark, tmplGoNext, setScreen, fx }),
+      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx }),
       screen === 'outline' && Outline({ oCur, oIndex, oShuffle, oPicked, oShowWrong, oPick, oUndo, oRetry, oNext, setScreen, fx })
     )
   );
@@ -692,6 +772,10 @@ function makeShuffle(i) {
 }
 function shuffleOutline(i) {
   return shuffle(ESSAY_OUTLINES[i].steps.map((w, oi) => ({ w, oi })));
+}
+// 默写归一化:小写、去省略号占位、去标点、压空格 —— 用于比对默写是否正确
+function normTmpl(s) {
+  return String(s).toLowerCase().replace(/\.\.\./g, ' ').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /* ============================================================
@@ -1101,30 +1185,59 @@ function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScree
 }
 
 /* ============================================================
-   模式⑤:作文模板(背诵卡)
+   模式⑤:作文模板(默写检查)
    ============================================================ */
-function Templates({ tmplIdx, tmplReveal, tmplDone, setTmplReveal, tmplMark, tmplGoNext, setScreen, fx }) {
+function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx }) {
   const cur = ESSAY_TEMPLATES[tmplIdx];
   const done = tmplDone.filter(Boolean).length;
+  const wordCount = cur.en.split(/\s+/).filter(w => !/^\.+$/.test(w)).length;
+  const perfect = tmplChecked && normTmpl(tmplInput) === normTmpl(cur.en);
+  // 逐词比对:用户写对的词标绿,漏写/写错的标红下划线
+  const userSet = new Set(normTmpl(tmplInput).split(' ').filter(Boolean));
+  const diffWords = cur.en.split(/\s+/).map((w, i) => {
+    const nw = w.toLowerCase().replace(/[^a-z]/g, '');
+    if (nw === '') return h('span', { key: 'dw' + i, style: { color: MUTED } }, ' ____ ');
+    const hit = userSet.has(nw);
+    return h('span', { key: 'dw' + i, style: {
+      color: hit ? GREEN : RED, fontWeight: '700',
+      textDecoration: hit ? 'none' : 'underline', textDecorationStyle: 'wavy', marginRight: '5px'
+    } }, w);
+  });
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文模板', sub: `已背 ${done} / ${ESSAY_TEMPLATES.length} · 第 ${tmplIdx + 1} 张`, setScreen }),
-    h('div', { className: fx === 'correct' ? 'fx-correct' : '',
-      style: { padding: '22px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '16px', minHeight: '210px' } },
-      h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '14px' } },
+    SubBar({ title: '作文模板默写', sub: `已背 ${done} / ${ESSAY_TEMPLATES.length} · 第 ${tmplIdx + 1} 张`, setScreen }),
+    h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
+      style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
+      h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '12px' } },
         '【' + cur.cat + '】' + (tmplDone[tmplIdx] ? '  ✓ 已背' : '')),
-      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '中文功能'),
-      h('div', { style: { fontSize: '18px', color: INK, fontWeight: '600', lineHeight: 1.6, marginBottom: '18px' } }, cur.zh),
-      tmplReveal
-        ? h('div', { key: 'reveal' },
-            h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '英文模板(默写记忆)'),
-            h('div', { style: { fontSize: '17px', color: DEEP, fontWeight: '700', lineHeight: 1.7,
-                padding: '12px 14px', background: 'rgba(124,58,237,0.06)', borderRadius: '12px' } }, cur.en))
-        : h('div', { key: 'hidden', style: { textAlign: 'center', padding: '22px 0' } },
-            h('button', { onClick: () => setTmplReveal(true), style: bigBtn(true) }, '👁  显示模板'))
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, `根据中文默写英文模板 · 约 ${wordCount} 词`),
+      h('div', { style: { fontSize: '18px', color: INK, fontWeight: '600', lineHeight: 1.6, marginBottom: '14px' } }, cur.zh),
+      h('textarea', { key: 'tmplinput', value: tmplInput, readonly: tmplChecked,
+        oninput: (e) => setTmplInput(e.target.value),
+        placeholder: '在此默写英文模板(空格处可写 … 或留空)…',
+        style: {
+          width: '100%', minHeight: '88px', padding: '12px 14px', borderRadius: '12px',
+          border: BORDER, background: tmplChecked ? 'rgba(124,58,237,0.04)' : '#fff',
+          color: INK, fontSize: '16px', lineHeight: 1.6, resize: 'vertical', outline: 'none',
+          fontFamily: 'inherit'
+        } })
     ),
-    tmplReveal && h('div', { key: 'tmplbtns', style: { display: 'flex', gap: '12px' } },
-      h('button', { onClick: tmplGoNext, style: bigBtn(false) }, '↻ 再背一次'),
-      h('button', { onClick: tmplMark, style: bigBtn(true) }, '✓ 记住了')
+    // 检查结果
+    tmplChecked && h('div', { key: 'tmplresult', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '14px', animation: 'riseIn .25s ease-out',
+        background: perfect ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.05)',
+        border: '1px solid ' + (perfect ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.3)') } },
+      h('div', { style: { fontSize: '15px', fontWeight: '800', color: perfect ? GREEN : RED, marginBottom: '10px' } },
+        perfect ? '✓ 完全正确!已计入已背' : '✗ 有出入,对照标准答案(绿=写对,红=漏写/写错)'),
+      h('div', { style: { fontSize: '16px', lineHeight: 1.9, padding: '10px 12px', background: 'rgba(124,58,237,0.05)', borderRadius: '10px' } }, diffWords),
+      h('div', { style: { fontSize: '13px', color: INK, marginTop: '10px' } }, '中文:' + cur.zh)
+    ),
+    // 操作按钮
+    h('div', { key: 'tmplbtns', style: { display: 'flex', gap: '12px' } },
+      !tmplChecked && h('button', { onClick: tmplCheck, disabled: !tmplInput.trim(),
+        style: { ...bigBtn(true), opacity: tmplInput.trim() ? 1 : 0.5 } }, '✓ 检查默写'),
+      tmplChecked && !perfect && h('button', { onClick: tmplRetry, style: bigBtn(false) }, '↺ 重写'),
+      tmplChecked && !perfect && h('button', { onClick: tmplMark, style: bigBtn(true) }, '算我背对了 →'),
+      tmplChecked && perfect && h('button', { onClick: tmplGoNext, style: bigBtn(true) }, '下一张 →')
     )
   );
 }
