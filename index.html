@@ -620,6 +620,7 @@ function App() {
   const [tShuffle, setTShuffle] = useState(() => makeShuffle(0));
   const [tPicked, setTPicked] = useState([]);       // 存 tShuffle 下标
   const [tShowWrong, setTShowWrong] = useState(false);
+  const [tRight, setTRight] = useState(false);      // 答对后展示考点、停留巩固
 
   // —— 句式点亮
   const [pIndex, setPIndex] = useState(0);
@@ -715,50 +716,48 @@ function App() {
 
   /* —— 进入各模式 —— */
   function enterTranslate() {
-    setScreen('translate');
-    setTPicked([]); setTShowWrong(false);
-    setTShuffle(makeShuffle(tIndex));
+    const ni = rnd(TRANSLATIONS.length);
+    setScreen('translate'); setTIndex(ni);
+    setTPicked([]); setTShowWrong(false); setTRight(false);
+    setTShuffle(makeShuffle(ni));
   }
-  function enterPattern() { setScreen('pattern'); setPChosen(null); }
-  function enterSynonym() { setScreen('synonym'); newBatch(0); }
+  function enterPattern() { setScreen('pattern'); setPIndex(rnd(PATTERNS.length)); setPChosen(null); }
+  function enterSynonym() { setScreen('synonym'); newBatch(rnd(SYNONYM_BATCHES.length)); }
 
   /* —— 翻译逻辑(按单词文本判对 → 两个相同的词换序也算对) —— */
   const tCur = TRANSLATIONS[tIndex];
   function nextSentence() {
-    setTIndex(i => {
-      const ni = (i + 1) % TRANSLATIONS.length;
-      setTShuffle(makeShuffle(ni));
-      return ni;
-    });
-    setTPicked([]); setTShowWrong(false);
+    const ni = rnd(TRANSLATIONS.length, tIndex);
+    setTIndex(ni); setTShuffle(makeShuffle(ni));
+    setTPicked([]); setTShowWrong(false); setTRight(false);
   }
   function retryTranslate() { setTShowWrong(false); setTPicked([]); }
   function pickBlock(pos) {
-    if (tShowWrong) return;
+    if (tShowWrong || tRight) return;
     const np = [...tPicked, pos];
     setTPicked(np);
     if (np.length === tCur.tokens.length) {
       // 关键:逐位比较单词文本,而非原始下标 —— 重复词不区分顺序
       const ok = np.every((p, idx) => tShuffle[p].w === tCur.tokens[idx]);
-      if (ok) { correctFlow(); setTimeout(nextSentence, 780); }
+      if (ok) { correctFlow(); setTRight(true); setTimeout(nextSentence, 2300); }  // 答对停留巩固
       else { wrongFlow(); setTShowWrong(true); }   // 不自动消失,留给用户看解释
     }
   }
   function undoBlock() {
-    if (tShowWrong) return;
+    if (tShowWrong || tRight) return;
     setTPicked(p => p.slice(0, -1));
   }
 
   /* —— 句式逻辑 —— */
   const pCur = PATTERNS[pIndex];
-  function nextPattern() { setPIndex(i => (i + 1) % PATTERNS.length); setPChosen(null); }
+  function nextPattern() { setPIndex(p => rnd(PATTERNS.length, p)); setPChosen(null); }
   function chooseOption(opt) {
     if (pChosen) return;
     setPChosen(opt);
     if (opt === pCur.answer) {
       setPLit(arr => { const n = arr.slice(); n[pIndex] = true; return n; });
       correctFlow();
-      setTimeout(() => { setPChosen(null); nextPattern(); }, 1000);
+      setTimeout(() => { setPChosen(null); nextPattern(); }, 2300);   // 答对停留巩固
     } else {
       wrongFlow();   // 答错:停下展示解释,等用户点“继续”
     }
@@ -798,19 +797,19 @@ function App() {
   }
 
   /* —— 固定搭配逻辑 —— */
-  function enterCollocation() { setScreen('collocation'); setColChosen(null); }
+  function enterCollocation() { setScreen('collocation'); setColIndex(rnd(COLLOCATIONS.length)); setColChosen(null); }
   const colCur = COLLOCATIONS[colIndex];
-  function colNext() { setColIndex(i => (i + 1) % COLLOCATIONS.length); setColChosen(null); }
+  function colNext() { setColIndex(i => rnd(COLLOCATIONS.length, i)); setColChosen(null); }
   function colChoose(opt) {
     if (colChosen) return;
     setColChosen(opt);
-    if (opt === colCur.answer) { correctFlow(); setTimeout(() => { setColChosen(null); colNext(); }, 800); }
+    if (opt === colCur.answer) { correctFlow(); setTimeout(() => { setColChosen(null); colNext(); }, 2300); }  // 答对停留巩固
     else { wrongFlow(); }   // 答错:展示正确搭配+释义,手动继续
   }
 
   /* —— 作文模板逻辑(默写检查) —— */
-  function enterTemplates() { setScreen('templates'); setTmplInput(''); setTmplChecked(false); }
-  function tmplGoNext() { setTmplIdx(i => (i + 1) % ESSAY_TEMPLATES.length); setTmplInput(''); setTmplChecked(false); }
+  function enterTemplates() { setScreen('templates'); setTmplIdx(rnd(ESSAY_TEMPLATES.length)); setTmplInput(''); setTmplChecked(false); }
+  function tmplGoNext() { setTmplIdx(i => rnd(ESSAY_TEMPLATES.length, i)); setTmplInput(''); setTmplChecked(false); }
   function tmplCheck() {
     if (!tmplInput.trim()) return;
     setTmplChecked(true);
@@ -825,9 +824,9 @@ function App() {
   }
 
   /* —— 作文构思逻辑(自己写思路 → 对照范例骨架) —— */
-  function enterOutline() { setScreen('outline'); setOInput(''); setORevealed(false); }
+  function enterOutline() { setScreen('outline'); setOIndex(rnd(ESSAY_OUTLINES.length)); setOInput(''); setORevealed(false); }
   const oCur = ESSAY_OUTLINES[oIndex];
-  function oNext() { setOIndex(i => (i + 1) % ESSAY_OUTLINES.length); setOInput(''); setORevealed(false); }
+  function oNext() { setOIndex(i => rnd(ESSAY_OUTLINES.length, i)); setOInput(''); setORevealed(false); }
   function oReveal() { if (oRevealed) return; setORevealed(true); correctFlow(); }
   function oRetry() { setORevealed(false); setOInput(''); }
 
@@ -847,7 +846,7 @@ function App() {
     // 屏幕层:key 随模式变化 → 仅切换模式时重建(播放入场动画),屏幕内操作只做增量更新
     h('div', { key: 'screen-' + screen },
       screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs }),
-      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }),
+      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }),
       screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav }),
       screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
       screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav }),
@@ -860,6 +859,12 @@ function App() {
 
 function makeShuffle(i) {
   return shuffle(TRANSLATIONS[i].tokens.map((w, oi) => ({ w, oi })));
+}
+// 随机下标(可排除某个值,避免和上一题重复)
+function rnd(n, not) {
+  if (n <= 1) return 0;
+  let i; do { i = Math.floor(Math.random() * n); } while (i === not);
+  return i;
 }
 function shuffleOutline(i) {
   return shuffle(ESSAY_OUTLINES[i].steps.map((w, oi) => ({ w, oi })));
@@ -997,7 +1002,7 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
 /* ============================================================
    模式①:翻译速拼
    ============================================================ */
-function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }) {
+function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }) {
   const pickedSet = new Set(tPicked);
   // 第一个语序错误位置:按单词文本比较(相同的词换序不算错)
   const firstWrong = tShowWrong ? tPicked.findIndex((p, idx) => tShuffle[p].w !== tCur.tokens[idx]) : -1;
@@ -1027,6 +1032,15 @@ function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, und
               } }, tShuffle[p].w)
           )
     ),
+    // 答对巩固面板(展示考点,停留约 2 秒)
+    tRight && h('div', { key: 'tright', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '16px', animation: 'riseIn .25s ease-out',
+        background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.4)' } },
+      h('div', { style: { fontSize: '14px', color: GREEN, fontWeight: '800', marginBottom: '8px' } }, '✓ 正确!巩固一下考点'),
+      h('div', { style: { fontSize: '15px', color: INK, lineHeight: 1.6, fontWeight: '700', marginBottom: '8px' } }, tCur.tokens.join(' ')),
+      h('div', { style: { fontSize: '13px', color: INK, lineHeight: 1.7, padding: '10px 12px',
+          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + tCur.why)
+    ),
     // 答错解释面板
     tShowWrong && h('div', { key: 'twrong', style: {
         padding: '14px', borderRadius: '14px', marginBottom: '16px',
@@ -1050,7 +1064,7 @@ function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, und
           style: {
             padding: '12px 16px', borderRadius: '12px', fontSize: '17px', fontWeight: '700',
             border: BORDER, background: PANEL, color: DEEP, boxShadow: SHADOW,
-            opacity: tShowWrong ? 0.5 : 1
+            opacity: (tShowWrong || tRight) ? 0.5 : 1
           } }, blk.w)
       )
     )
@@ -1095,6 +1109,15 @@ function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setSc
             boxShadow: SHADOW
           } }, opt);
       })
+    ),
+    // 答对巩固面板(展示完整例句+讲解,停留约 2 秒)
+    correct && h('div', { key: 'pright', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '16px', animation: 'riseIn .25s ease-out',
+        background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.4)' } },
+      h('div', { style: { fontSize: '14px', color: GREEN, fontWeight: '800', marginBottom: '8px' } }, '✓ 正确!巩固一下'),
+      h('div', { style: { fontSize: '14px', color: INK, lineHeight: 1.6, fontWeight: '700', marginBottom: '8px' } }, pCur.full),
+      h('div', { style: { fontSize: '13px', color: INK, lineHeight: 1.7, padding: '10px 12px',
+          background: 'rgba(124,58,237,0.06)', borderRadius: '10px' } }, '💡 ' + pCur.why)
     ),
     // 答错解释面板
     wrong && h('div', { key: 'pwrong', style: {
@@ -1311,6 +1334,13 @@ function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScree
             color: isAns ? GREEN : isBad ? RED : DEEP, boxShadow: SHADOW
           } }, opt);
       })
+    ),
+    correct && h('div', { key: 'colright', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '4px', animation: 'riseIn .25s ease-out',
+        background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.4)' } },
+      h('div', { style: { fontSize: '15px', color: GREEN, fontWeight: '800', marginBottom: '6px' } },
+        '✓ 正确搭配:' + colCur.q.replace('___', colCur.answer)),
+      h('div', { style: { fontSize: '13px', color: INK } }, '释义:' + colCur.cn)
     ),
     wrong && h('div', { key: 'colwrong', style: {
         padding: '14px', borderRadius: '14px', background: 'rgba(220,38,38,0.05)',
