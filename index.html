@@ -673,6 +673,13 @@ function App() {
   const [favs, setFavs] = useState(() => { try { return JSON.parse(localStorage.getItem('cet6_favs') || '[]'); } catch (e) { return []; } });
   const [wordFavs, setWordFavs] = useState(() => { try { return JSON.parse(localStorage.getItem('cet6_wordfavs') || '[]'); } catch (e) { return []; } });
 
+  // —— 生词测试(拼写/默写小测)
+  const [wtIdx, setWtIdx] = useState(0);
+  const [wtHist, setWtHist] = useState([0]);
+  const [wtHp, setWtHp] = useState(0);
+  const [wtInput, setWtInput] = useState('');
+  const [wtChecked, setWtChecked] = useState(false);
+
   // —— 查词弹窗
   const [dictWord, setDictWord] = useState(null);
   const [dictPos, setDictPos] = useState({ x: 0, y: 0 });
@@ -711,6 +718,21 @@ function App() {
     setScreen(mode);
   }
   function enterFavorites() { setScreen('favorites'); }
+
+  /* —— 生词测试逻辑 —— */
+  function enterWordTest() {
+    const n = wordFavs.length; const ni = n ? rnd(n) : 0;
+    setScreen('wordtest'); setWtHist([ni]); setWtHp(0); setWtIdx(ni); setWtInput(''); setWtChecked(false);
+  }
+  function wtLoad(ni) { setWtIdx(ni); setWtInput(''); setWtChecked(false); }
+  function wtNext() { const n = wordFavs.length; if (!n) return; const r = histForward(wtHist, wtHp, n); setWtHist(r.hist); setWtHp(r.hp); wtLoad(r.idx); }
+  function wtPrev() { if (wtHp > 0) { setWtHp(wtHp - 1); wtLoad(wtHist[wtHp - 1]); } }
+  function wtRetry() { setWtChecked(false); setWtInput(''); }
+  function wtCheck() {
+    if (!wtInput.trim()) return;
+    setWtChecked(true);
+    if (tmplPerfect(wtInput, wordFavs[wtIdx])) correctFlow(); else wrongFlow();
+  }
 
   /* —— 通用答对/答错流程 —— */
   function correctFlow() {
@@ -874,14 +896,15 @@ function App() {
     ),
     // 屏幕层:key 随模式变化 → 仅切换模式时重建(播放入场动画),屏幕内操作只做增量更新
     h('div', { key: 'screen-' + screen },
-      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs, wordFavs }),
+      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, enterWordTest, pLit, tmplDone, favs, wordFavs }),
       screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, pos: tHp + 1, onPrev: prevSentence, canPrev: tHp > 0 }),
       screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, pos: pHp + 1, onPrev: prevPattern, canPrev: pHp > 0 }),
       screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
       screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, pos: colHp + 1, onPrev: prevCol, canPrev: colHp > 0 }),
       screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, pos: tmplHp + 1, onPrev: tmplPrev, canPrev: tmplHp > 0 }),
       screen === 'outline' && Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, pos: oHp + 1, onPrev: oPrev, canPrev: oHp > 0 }),
-      screen === 'favorites' && Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen })
+      screen === 'favorites' && Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen, onTestWords: enterWordTest }),
+      screen === 'wordtest' && WordTest({ wordFavs, wtIdx, wtInput, wtChecked, setWtInput, wtCheck, wtRetry, wtNext, setScreen, fx, pos: wtHp + 1, onPrev: wtPrev, canPrev: wtHp > 0 })
     )
   );
 }
@@ -934,6 +957,13 @@ function tmplPerfect(input, en) {
   const t = normTmpl(en).split(' ').filter(Boolean);
   return u.length === t.length && u.every((w, i) => fuzzyEq(w, t[i]));
 }
+// 生词测试提示:保留每个单词首字母,其余字母用 _ 遮罩(空格/连字符保留)
+function maskTerm(t) {
+  return String(t).split(/(\s+)/).map(seg => {
+    if (/^\s+$/.test(seg)) return seg;
+    return seg.split('').map((ch, i) => (i === 0 ? ch : (/[A-Za-z]/.test(ch) ? '_' : ch))).join('');
+  }).join('');
+}
 // 取屏幕坐标处的英文单词(供长按/右键查词,无需给每个词包标签)
 function wordAtPoint(x, y) {
   let range = null;
@@ -980,7 +1010,7 @@ function Header({ todayCount, combo }) {
 /* ============================================================
    主菜单
    ============================================================ */
-function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs, wordFavs }) {
+function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, enterWordTest, pLit, tmplDone, favs, wordFavs }) {
   const litCount = pLit.filter(Boolean).length;
   const tmplCount = tmplDone.filter(Boolean).length;
   const cards = [
@@ -990,6 +1020,7 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
     { icon: '💡', title: '句式点亮', desc: '作文高级句式 · 点亮句库', accent: '#0ea5e9', onClick: enterPattern, badge: `${litCount}/${PATTERNS.length} 已点亮` },
     { icon: '📝', title: '作文模板', desc: '万能句式 · 默写检查', accent: '#8b5cf6', onClick: enterTemplates, badge: `已背 ${tmplCount}/${ESSAY_TEMPLATES.length}` },
     { icon: '🏗️', title: '作文构思', desc: '自己列思路 · 对照范例骨架', accent: '#ef4444', onClick: enterOutline, badge: `${ESSAY_OUTLINES.length} 题` },
+    { icon: '🧪', title: '生词测试', desc: '生词本拼写 / 默写小测', accent: '#14b8a6', onClick: enterWordTest, badge: `${wordFavs.length} 词` },
     { icon: '⭐', title: '我的收藏', desc: '收藏题目 + 生词本 · 集中复习', accent: '#eab308', onClick: enterFavorites, badge: `${favs.length} 题 · ${wordFavs.length} 词` },
   ];
   return h('div', { style: { animation: 'riseIn .4s ease-out' } },
@@ -1505,7 +1536,7 @@ function favLabel(mode, idx) {
   if (mode === 'outline' && ESSAY_OUTLINES[idx]) return { tag: '构思', text: ESSAY_OUTLINES[idx].topic };
   return { tag: '?', text: '(已失效)' };
 }
-function Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen }) {
+function Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen, onTestWords }) {
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
     SubBar({ title: '我的收藏', sub: `${favs.length} 题 · ${wordFavs.length} 词 · 已本地保存`, setScreen }),
     (favs.length === 0 && wordFavs.length === 0)
@@ -1513,7 +1544,11 @@ function Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScree
           '还没有收藏~\n题目:右上角点「☆ 收藏」。\n单词/词组:右键(电脑)或长按(手机)任意词,弹窗里点「☆ 加入生词本」;选中一段文字再操作可收藏词组。'),
     // 生词本
     wordFavs.length > 0 && h('div', { key: 'wsec', style: { marginBottom: '18px' } },
-      h('div', { style: { fontSize: '13px', fontWeight: '800', color: DEEP, margin: '4px 0 10px' } }, '📒 生词本 / 词组'),
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 10px' } },
+        h('span', { style: { fontSize: '13px', fontWeight: '800', color: DEEP } }, '📒 生词本 / 词组'),
+        h('button', { onClick: onTestWords, style: {
+            padding: '6px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: '800', border: 'none',
+            background: 'linear-gradient(180deg, #2dd4bf, #14b8a6)', color: '#fff' } }, '🧪 测一测')),
       h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } },
         wordFavs.map((w) => h('div', { key: 'wf' + w, style: {
             display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 10px', borderRadius: '999px',
@@ -1538,6 +1573,52 @@ function Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScree
           info.tag !== '?' && h('button', { onClick: () => gotoFav(mode, idx), style: smallBtn(true) }, '去练习 →')
         );
       })
+    )
+  );
+}
+
+/* ============================================================
+   生词测试(拼写 / 默写小测)
+   ============================================================ */
+function WordTest({ wordFavs, wtIdx, wtInput, wtChecked, setWtInput, wtCheck, wtRetry, wtNext, setScreen, fx, pos, onPrev, canPrev }) {
+  if (wordFavs.length === 0) {
+    return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+      SubBar({ title: '生词测试', sub: '生词本为空', setScreen }),
+      h('div', { style: { textAlign: 'center', padding: '46px 20px', color: MUTED, fontSize: '14px', lineHeight: 1.9 } },
+        '生词本还是空的~\n在任意界面右键(电脑)或长按(手机)一个英文单词 / 选中词组,点「☆ 加入生词本」,再回来测试。')
+    );
+  }
+  const term = wordFavs[Math.min(wtIdx, wordFavs.length - 1)];
+  const gloss = GLOSS[term.toLowerCase()];
+  const ok = wtChecked && tmplPerfect(wtInput, term);
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '生词测试', sub: `本次第 ${pos} 词`, setScreen, onPrev, canPrev }),
+    h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
+      style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '8px' } }, '根据释义 / 提示拼写出这个词'),
+      h('div', { style: { fontSize: '20px', color: INK, fontWeight: '700', marginBottom: '10px' } }, gloss || '(暂无中文释义)'),
+      h('div', { style: { fontSize: '20px', color: PURPLE, fontWeight: '800', letterSpacing: '3px', fontFamily: 'Consolas, monospace', marginBottom: '14px' } }, maskTerm(term)),
+      h('input', { key: 'wtinput', type: 'text', value: wtInput, readonly: wtChecked, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false',
+        oninput: (e) => setWtInput(e.target.value),
+        placeholder: '在此拼写…',
+        style: {
+          width: '100%', padding: '13px 14px', borderRadius: '12px', border: BORDER,
+          background: wtChecked ? 'rgba(124,58,237,0.04)' : '#fff', color: INK, fontSize: '18px', outline: 'none', fontFamily: 'inherit'
+        } })
+    ),
+    wtChecked && h('div', { key: 'wtres', style: {
+        padding: '14px', borderRadius: '14px', marginBottom: '14px', animation: 'riseIn .25s ease-out',
+        background: ok ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.05)',
+        border: '1px solid ' + (ok ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.3)') } },
+      h('div', { style: { fontSize: '15px', fontWeight: '800', color: ok ? GREEN : RED, marginBottom: '6px' } },
+        ok ? '✓ 拼写正确!' : '✗ 正确拼写如下'),
+      h('div', { style: { fontSize: '18px', color: INK, fontWeight: '700' } }, term),
+      gloss && h('div', { style: { fontSize: '13px', color: MUTED, marginTop: '4px' } }, gloss)
+    ),
+    h('div', { key: 'wtbtns', style: { display: 'flex', gap: '12px' } },
+      !wtChecked && h('button', { onClick: wtCheck, disabled: !wtInput.trim(), style: { ...bigBtn(true), opacity: wtInput.trim() ? 1 : 0.5 } }, '✓ 检查'),
+      wtChecked && !ok && h('button', { onClick: wtRetry, style: bigBtn(false) }, '↺ 重写'),
+      wtChecked && h('button', { onClick: wtNext, style: bigBtn(true) }, '下一词 →')
     )
   );
 }
