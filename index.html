@@ -516,6 +516,51 @@ const ESSAY_OUTLINES = [
   { topic: "Work-Life Balance 平衡工作与生活", steps: ["现象:快节奏下许多人忽视生活", "问题:长期失衡损害身心健康", "原因:竞争压力与时间管理不当", "建议:合理规划,劳逸结合"] },
 ];
 
+// 内置中文小词库(离线兜底,覆盖 App 高频词;在线 API 不可用时仍能查)
+const GLOSS = {
+  decrease: "v./n. 减少", decline: "v. 下降;衰退", significant: "adj. 重要的;显著的", considerable: "adj. 相当大的",
+  obtain: "v. 获得", acquire: "v. 获得;习得", important: "adj. 重要的", crucial: "adj. 至关重要的",
+  increase: "v./n. 增加", rise: "v./n. 上升;增长", difficult: "adj. 困难的", challenging: "adj. 有挑战性的",
+  show: "v. 表明;展示", demonstrate: "v. 证明;演示", enough: "adj. 足够的", sufficient: "adj. 充足的",
+  harmful: "adj. 有害的", detrimental: "adj. 有害的;不利的", famous: "adj. 著名的", renowned: "adj. 著名的",
+  improve: "v. 改善;提高", enhance: "v. 提升;增强", reason: "n. 原因;理由", cause: "v. 导致 n. 原因",
+  stop: "v. 停止", cease: "v. 停止;终止", begin: "v. 开始", commence: "v. 开始(正式)",
+  help: "v./n. 帮助", assist: "v. 协助", need: "v./n. 需要", require: "v. 需要;要求",
+  huge: "adj. 巨大的", enormous: "adj. 庞大的", fast: "adj. 快的", rapid: "adj. 迅速的",
+  get: "v. 得到", gain: "v. 获得;增加", idea: "n. 主意;想法", notion: "n. 概念;观念",
+  protect: "v. 保护", safeguard: "v. 保护 n. 防护", change: "v./n. 改变", alter: "v. 改变;更改",
+  rich: "adj. 富有的", wealthy: "adj. 富裕的", smart: "adj. 聪明的", intelligent: "adj. 聪明的;智能的",
+  clear: "adj. 清楚的", evident: "adj. 明显的", hard: "adj. 困难的;努力地", arduous: "adj. 艰巨的",
+  allow: "v. 允许", permit: "v. 允许 n. 许可证", beautiful: "adj. 美丽的", gorgeous: "adj. 华丽的;极好的",
+  maintain: "v. 维持;保养", sustain: "v. 维持;支撑", reveal: "v. 揭示;透露", disclose: "v. 披露",
+  essential: "adj. 必不可少的", vital: "adj. 至关重要的", typical: "adj. 典型的", representative: "adj. 有代表性的",
+  abundant: "adj. 丰富的", plentiful: "adj. 充足的", obvious: "adj. 明显的", consequence: "n. 后果",
+  outcome: "n. 结果", fundamental: "adj. 基本的", basic: "adj. 基本的", promote: "v. 促进;晋升",
+  foster: "v. 培养;促进", restrict: "v. 限制", limit: "v./n. 限制", accurate: "adj. 准确的",
+  precise: "adj. 精确的", genuine: "adj. 真正的;真诚的", authentic: "adj. 真实的;正宗的",
+  development: "n. 发展", technology: "n. 技术", rely: "v. 依赖(rely on)", smartphone: "n. 智能手机",
+  ancient: "adj. 古老的", bridge: "n. 桥", masterpiece: "n. 杰作", architecture: "n. 建筑(学)",
+  symbol: "n. 象征;符号", spirit: "n. 精神", traditional: "adj. 传统的", craft: "n. 手工艺",
+  heritage: "n. 遗产", intangible: "adj. 无形的", cultural: "adj. 文化的", scientist: "n. 科学家",
+  invent: "v. 发明", award: "n. 奖 v. 授予", education: "n. 教育", destiny: "n. 命运",
+  countless: "adj. 无数的", improvement: "n. 提高;改善", standard: "n. 标准", attention: "n. 注意",
+  foreigner: "n. 外国人", indispensable: "adj. 不可或缺的", translate: "v. 翻译", measure: "n. 措施 v. 测量",
+  government: "n. 政府", economic: "adj. 经济的", network: "n. 网络", developed: "adj. 发达的",
+  project: "n. 项目", environment: "n. 环境", advance: "n./v. 推进;前进", urbanization: "n. 城市化",
+  village: "n. 村庄", gradually: "adv. 逐渐地", disappear: "v. 消失", outstanding: "adj. 杰出的",
+  founder: "n. 创始人;奠基人", agriculture: "n. 农业", achievement: "n. 成就", remarkable: "adj. 显著的;非凡的",
+  festival: "n. 节日", benefit: "v. 使受益 n. 益处", remote: "adj. 偏远的", mountainous: "adj. 多山的",
+  recent: "adj. 最近的", commerce: "n. 商业", constant: "adj. 持续的;不断的", effort: "n. 努力",
+  compare: "v. 比较", infrastructure: "n. 基础设施", recognition: "n. 认可;承认", practical: "adj. 实际的;可行的",
+  pollution: "n. 污染", advantage: "n. 优势", account: "v. 解释;占 n. 账户", aware: "adj. 意识到的",
+  responsible: "adj. 负责的", contribute: "v. 贡献;促成", capable: "adj. 有能力的", focus: "v. 集中 n. 焦点",
+  regard: "v. 把…视为;关于", charge: "n. 费用;负责 v. 收费", result: "n. 结果 v. 导致", sake: "n. 缘故(for the sake of)",
+  prior: "adj. 在前的(prior to)", accustomed: "adj. 习惯的", subject: "n. 主题 adj. 易受…的", accordance: "n. 一致(in accordance with)",
+  outweigh: "v. 重于;胜过", perspective: "n. 视角;观点", deny: "v. 否认", admittedly: "adv. 诚然",
+  overlook: "v. 忽视;俯瞰", phenomenon: "n. 现象", conclusion: "n. 结论", dramatically: "adv. 显著地",
+  increasingly: "adv. 日益;越来越", undoubtedly: "adv. 毫无疑问", joint: "adj. 共同的", efforts: "n. 努力(effort 复数)",
+};
+
 /* ============================================================
    主题色(白底紫调)
    ============================================================ */
@@ -530,11 +575,33 @@ const PANEL  = "#ffffff";
 const BORDER = "1px solid rgba(124,58,237,0.18)";
 const SHADOW = "0 6px 22px rgba(124,58,237,0.10)";
 
-// 全局 ESC 监听(只挂一次)
-const appApi = { toggleDisguise: () => {} };
+// 全局 ESC / 取词 监听(只挂一次)
+const appApi = { toggleDisguise: () => {}, lookup: () => {} };
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); appApi.toggleDisguise(); }
 });
+// 右键(桌面)取词查释义
+document.addEventListener('contextmenu', (e) => {
+  const w = wordAtPoint(e.clientX, e.clientY);
+  if (w) { e.preventDefault(); appApi.lookup(w, e.clientX, e.clientY); }
+});
+// 长按(移动端)取词查释义
+let _lpTimer = null, _lpX = 0, _lpY = 0;
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  const t = e.touches[0]; _lpX = t.clientX; _lpY = t.clientY;
+  _lpTimer = setTimeout(() => {
+    const w = wordAtPoint(_lpX, _lpY);
+    if (w) appApi.lookup(w, _lpX, _lpY);
+  }, 500);
+}, { passive: true });
+document.addEventListener('touchmove', (e) => {
+  if (_lpTimer && e.touches.length === 1) {
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - _lpX) > 10 || Math.abs(t.clientY - _lpY) > 10) { clearTimeout(_lpTimer); _lpTimer = null; }
+  }
+}, { passive: true });
+document.addEventListener('touchend', () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } });
 
 /* ============================================================
    App
@@ -580,14 +647,48 @@ function App() {
   const [tmplChecked, setTmplChecked] = useState(false);
   const [tmplDone, setTmplDone] = useState(() => Array(ESSAY_TEMPLATES.length).fill(false));
 
-  // —— 作文构思
+  // —— 作文构思(自己输入思路 → 对照范例)
   const [oIndex, setOIndex] = useState(0);
-  const [oShuffle, setOShuffle] = useState(() => shuffleOutline(0));
-  const [oPicked, setOPicked] = useState([]);
-  const [oShowWrong, setOShowWrong] = useState(false);
+  const [oInput, setOInput] = useState('');
+  const [oRevealed, setORevealed] = useState(false);
 
-  // 注册 ESC 切换
+  // —— 收藏(localStorage 持久化)
+  const [favs, setFavs] = useState(() => { try { return JSON.parse(localStorage.getItem('cet6_favs') || '[]'); } catch (e) { return []; } });
+
+  // —— 查词弹窗
+  const [dictWord, setDictWord] = useState(null);
+  const [dictPos, setDictPos] = useState({ x: 0, y: 0 });
+  const [dictData, setDictData] = useState(null);   // null=加载中 | {phonetic,defs} | 'error'
+
+  // 注册 ESC 切换 + 取词查释义
   appApi.toggleDisguise = () => setDisguise(d => !d);
+  appApi.lookup = (word, x, y) => {
+    setDictWord(word); setDictPos({ x, y }); setDictData(null);
+    fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(word.toLowerCase()))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(arr => {
+        const e0 = arr[0] || {};
+        const phonetic = e0.phonetic || (e0.phonetics || []).map(p => p.text).find(Boolean) || '';
+        const defs = [];
+        (e0.meanings || []).forEach(m => (m.definitions || []).slice(0, 1).forEach(d => defs.push({ pos: m.partOfSpeech, def: d.definition, ex: d.example })));
+        setDictData({ phonetic, defs: defs.slice(0, 3) });
+      })
+      .catch(() => setDictData('error'));
+  };
+
+  // 收藏:切换 + 跳转
+  function toggleFav(id) {
+    setFavs(f => { const n = f.includes(id) ? f.filter(x => x !== id) : [...f, id]; try { localStorage.setItem('cet6_favs', JSON.stringify(n)); } catch (e) {} return n; });
+  }
+  function gotoFav(mode, idx) {
+    if (mode === 'translate') { setTIndex(idx); setTPicked([]); setTShowWrong(false); setTShuffle(makeShuffle(idx)); }
+    else if (mode === 'pattern') { setPIndex(idx); setPChosen(null); }
+    else if (mode === 'collocation') { setColIndex(idx); setColChosen(null); }
+    else if (mode === 'templates') { setTmplIdx(idx); setTmplInput(''); setTmplChecked(false); }
+    else if (mode === 'outline') { setOIndex(idx); setOInput(''); setORevealed(false); }
+    setScreen(mode);
+  }
+  function enterFavorites() { setScreen('favorites'); }
 
   /* —— 通用答对/答错流程 —— */
   function correctFlow() {
@@ -713,7 +814,7 @@ function App() {
   function tmplCheck() {
     if (!tmplInput.trim()) return;
     setTmplChecked(true);
-    const ok = normTmpl(tmplInput) === normTmpl(ESSAY_TEMPLATES[tmplIdx].en);
+    const ok = tmplPerfect(tmplInput, ESSAY_TEMPLATES[tmplIdx].en);
     if (ok) { setTmplDone(a => { const n = a.slice(); n[tmplIdx] = true; return n; }); correctFlow(); }
     else { wrongFlow(); }
   }
@@ -723,46 +824,36 @@ function App() {
     tmplGoNext();
   }
 
-  /* —— 作文构思逻辑(骨架排序,steps 唯一 → 按原始下标判对) —— */
-  function enterOutline() { setScreen('outline'); setOPicked([]); setOShowWrong(false); setOShuffle(shuffleOutline(oIndex)); }
+  /* —— 作文构思逻辑(自己写思路 → 对照范例骨架) —— */
+  function enterOutline() { setScreen('outline'); setOInput(''); setORevealed(false); }
   const oCur = ESSAY_OUTLINES[oIndex];
-  function oNext() {
-    setOIndex(i => { const ni = (i + 1) % ESSAY_OUTLINES.length; setOShuffle(shuffleOutline(ni)); return ni; });
-    setOPicked([]); setOShowWrong(false);
-  }
-  function oRetry() { setOShowWrong(false); setOPicked([]); }
-  function oPick(pos) {
-    if (oShowWrong) return;
-    const np = [...oPicked, pos];
-    setOPicked(np);
-    if (np.length === oCur.steps.length) {
-      const ok = np.every((p, idx) => oShuffle[p].oi === idx);
-      if (ok) { correctFlow(); setTimeout(oNext, 820); }
-      else { wrongFlow(); setOShowWrong(true); }
-    }
-  }
-  function oUndo() { if (oShowWrong) return; setOPicked(p => p.slice(0, -1)); }
+  function oNext() { setOIndex(i => (i + 1) % ESSAY_OUTLINES.length); setOInput(''); setORevealed(false); }
+  function oReveal() { if (oRevealed) return; setORevealed(true); correctFlow(); }
+  function oRetry() { setORevealed(false); setOInput(''); }
 
   /* ====================== 渲染 ====================== */
   if (disguise) return Disguise();
 
+  const fav = { favs, toggle: toggleFav };
   return h('div', { key: 'app', style: { maxWidth: '500px', margin: '0 auto', padding: '0 16px 40px', position: 'relative', minHeight: '100vh' } },
     Header({ todayCount, combo }),
     // 叠加层:固定槽位,内容增删不影响主体布局
     h('div', { key: 'overlay' },
       fx === 'correct' && ParticleBurst({ combo }),
       comboMsg && ComboBanner({ comboMsg }),
-      combo >= 5 && EdgeGlow({ strong: combo >= 10 })
+      combo >= 5 && EdgeGlow({ strong: combo >= 10 }),
+      dictWord && WordPopup({ dictWord, dictPos, dictData, close: () => setDictWord(null) })
     ),
     // 屏幕层:key 随模式变化 → 仅切换模式时重建(播放入场动画),屏幕内操作只做增量更新
     h('div', { key: 'screen-' + screen },
-      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, pLit, tmplDone }),
-      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx }),
-      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx }),
+      screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs }),
+      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }),
+      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav }),
       screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
-      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx }),
-      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx }),
-      screen === 'outline' && Outline({ oCur, oIndex, oShuffle, oPicked, oShowWrong, oPick, oUndo, oRetry, oNext, setScreen, fx })
+      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav }),
+      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav }),
+      screen === 'outline' && Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav }),
+      screen === 'favorites' && Favorites({ favs, toggleFav, gotoFav, setScreen })
     )
   );
 }
@@ -776,6 +867,46 @@ function shuffleOutline(i) {
 // 默写归一化:小写、去省略号占位、去标点、压空格 —— 用于比对默写是否正确
 function normTmpl(s) {
   return String(s).toLowerCase().replace(/\.\.\./g, ' ').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+// 编辑距离(Levenshtein)—— 用于默写宽松判分,容忍个别拼写差异
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+// 单词模糊相等:词越长容许的拼写误差越大(0~2 个编辑)
+function fuzzyEq(u, t) {
+  if (u === t) return true;
+  const tol = t.length <= 3 ? 0 : t.length <= 6 ? 1 : 2;
+  return lev(u, t) <= tol;
+}
+// 默写整体判对(宽松):词数一致且逐词模糊相等 —— 容忍个别拼写差异
+function tmplPerfect(input, en) {
+  const u = normTmpl(input).split(' ').filter(Boolean);
+  const t = normTmpl(en).split(' ').filter(Boolean);
+  return u.length === t.length && u.every((w, i) => fuzzyEq(w, t[i]));
+}
+// 取屏幕坐标处的英文单词(供长按/右键查词,无需给每个词包标签)
+function wordAtPoint(x, y) {
+  let range = null;
+  if (document.caretRangeFromPoint) range = document.caretRangeFromPoint(x, y);
+  else if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (p) { range = document.createRange(); range.setStart(p.offsetNode, p.offset); range.collapse(true); } }
+  if (!range || range.startContainer.nodeType !== 3) return null;
+  const text = range.startContainer.textContent, i = range.startOffset;
+  const isW = c => c && /[A-Za-z'\-]/.test(c);
+  let s = i, e = i;
+  while (s > 0 && isW(text[s - 1])) s--;
+  while (e < text.length && isW(text[e])) e++;
+  const w = text.slice(s, e).replace(/^[-']+|[-']+$/g, '');
+  return (w && /[A-Za-z]/.test(w)) ? w : null;
 }
 
 /* ============================================================
@@ -809,7 +940,7 @@ function Header({ todayCount, combo }) {
 /* ============================================================
    主菜单
    ============================================================ */
-function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, pLit, tmplDone }) {
+function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, pLit, tmplDone, favs }) {
   const litCount = pLit.filter(Boolean).length;
   const tmplCount = tmplDone.filter(Boolean).length;
   const cards = [
@@ -817,8 +948,9 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
     { icon: '🔗', title: '同义替换', desc: '阅读高频换词 · 配对消除练题感', accent: '#db2777', onClick: enterSynonym, badge: `${SYNONYM_BATCHES.length} 批` },
     { icon: '🧩', title: '固定搭配', desc: '高频搭配快闪 · 写作阅读通吃', accent: '#f59e0b', onClick: enterCollocation, badge: `${COLLOCATIONS.length} 题` },
     { icon: '💡', title: '句式点亮', desc: '作文高级句式 · 点亮句库', accent: '#0ea5e9', onClick: enterPattern, badge: `${litCount}/${PATTERNS.length} 已点亮` },
-    { icon: '📝', title: '作文模板', desc: '万能句式背诵卡 · 攒作文弹药', accent: '#8b5cf6', onClick: enterTemplates, badge: `已背 ${tmplCount}/${ESSAY_TEMPLATES.length}` },
-    { icon: '🏗️', title: '作文构思', desc: '议论文骨架 · 逻辑顺序排列', accent: '#ef4444', onClick: enterOutline, badge: `${ESSAY_OUTLINES.length} 题` },
+    { icon: '📝', title: '作文模板', desc: '万能句式 · 默写检查', accent: '#8b5cf6', onClick: enterTemplates, badge: `已背 ${tmplCount}/${ESSAY_TEMPLATES.length}` },
+    { icon: '🏗️', title: '作文构思', desc: '自己列思路 · 对照范例骨架', accent: '#ef4444', onClick: enterOutline, badge: `${ESSAY_OUTLINES.length} 题` },
+    { icon: '⭐', title: '我的收藏', desc: '收藏的题目 · 集中复习', accent: '#eab308', onClick: enterFavorites, badge: `${favs.length} 条` },
   ];
   return h('div', { style: { animation: 'riseIn .4s ease-out' } },
     h('div', { style: { textAlign: 'center', margin: '6px 0 26px' } },
@@ -865,12 +997,12 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
 /* ============================================================
    模式①:翻译速拼
    ============================================================ */
-function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx }) {
+function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav }) {
   const pickedSet = new Set(tPicked);
   // 第一个语序错误位置:按单词文本比较(相同的词换序不算错)
   const firstWrong = tShowWrong ? tPicked.findIndex((p, idx) => tShuffle[p].w !== tCur.tokens[idx]) : -1;
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '翻译速拼', sub: `第 ${tIndex + 1} / ${TRANSLATIONS.length}`, setScreen }),
+    SubBar({ title: '翻译速拼', sub: `第 ${tIndex + 1} / ${TRANSLATIONS.length}`, setScreen, favId: 'translate#' + tIndex, fav }),
     h('div', { style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '16px', boxShadow: SHADOW } },
       h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '8px' } }, '中文'),
       h('div', { style: { fontSize: '20px', lineHeight: 1.7, color: INK, fontWeight: '600' } }, tCur.zh)
@@ -928,12 +1060,12 @@ function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, pickBlock, und
 /* ============================================================
    模式②:句式点亮
    ============================================================ */
-function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx }) {
+function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav }) {
   const correct = pChosen && pChosen === pCur.answer;
   const wrong = pChosen && pChosen !== pCur.answer;
   const litExamples = PATTERNS.filter((_, i) => pLit[i]);
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '句式点亮', sub: `${pLit.filter(Boolean).length} / ${PATTERNS.length} 已点亮`, setScreen }),
+    SubBar({ title: '句式点亮', sub: `${pLit.filter(Boolean).length} / ${PATTERNS.length} 已点亮`, setScreen, favId: 'pattern#' + pIndex, fav }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '14px', boxShadow: SHADOW } },
       h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '10px', letterSpacing: '1px' } }, pCur.name),
@@ -1078,15 +1210,22 @@ function smallBtn(primary) {
 /* ============================================================
    子页头(标题 + 返回)
    ============================================================ */
-function SubBar({ title, sub, setScreen }) {
+function SubBar({ title, sub, setScreen, favId, fav }) {
+  const isFav = fav && favId && fav.favs.includes(favId);
   return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 18px' } },
     h('div', null,
       h('div', { style: { fontSize: '22px', fontWeight: '900', color: DEEP } }, title),
       h('div', { style: { fontSize: '12px', color: MUTED, marginTop: '3px' } }, sub)
     ),
-    h('button', { onClick: () => setScreen('menu'), style: {
-        padding: '10px 16px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
-        border: BORDER, background: PANEL, color: PURPLE, boxShadow: SHADOW } }, '‹ 菜单')
+    h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+      favId && fav && h('button', { onClick: () => fav.toggle(favId), style: {
+          padding: '10px 13px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
+          border: isFav ? '1px solid ' + PURPLE : BORDER, background: isFav ? 'rgba(124,58,237,0.12)' : PANEL,
+          color: isFav ? PURPLE : MUTED, boxShadow: SHADOW } }, isFav ? '★ 已收藏' : '☆ 收藏'),
+      h('button', { onClick: () => setScreen('menu'), style: {
+          padding: '10px 16px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
+          border: BORDER, background: PANEL, color: PURPLE, boxShadow: SHADOW } }, '‹ 菜单')
+    )
   );
 }
 
@@ -1145,12 +1284,12 @@ function EdgeGlow({ strong }) {
 /* ============================================================
    模式④:固定搭配(快闪选择)
    ============================================================ */
-function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx }) {
+function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav }) {
   const correct = colChosen && colChosen === colCur.answer;
   const wrong = colChosen && colChosen !== colCur.answer;
   const parts = colCur.q.split('___');
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '固定搭配', sub: `第 ${colIndex + 1} / ${COLLOCATIONS.length}`, setScreen }),
+    SubBar({ title: '固定搭配', sub: `第 ${colIndex + 1} / ${COLLOCATIONS.length}`, setScreen, favId: 'collocation#' + colIndex, fav }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '28px 20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '16px', textAlign: 'center' } },
       h('div', { style: { fontSize: '13px', color: MUTED, marginBottom: '14px' } }, colCur.cn),
@@ -1187,24 +1326,24 @@ function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScree
 /* ============================================================
    模式⑤:作文模板(默写检查)
    ============================================================ */
-function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx }) {
+function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav }) {
   const cur = ESSAY_TEMPLATES[tmplIdx];
   const done = tmplDone.filter(Boolean).length;
   const wordCount = cur.en.split(/\s+/).filter(w => !/^\.+$/.test(w)).length;
-  const perfect = tmplChecked && normTmpl(tmplInput) === normTmpl(cur.en);
-  // 逐词比对:用户写对的词标绿,漏写/写错的标红下划线
-  const userSet = new Set(normTmpl(tmplInput).split(' ').filter(Boolean));
+  const perfect = tmplChecked && tmplPerfect(tmplInput, cur.en);
+  // 逐词比对(宽松):用户写对(含拼写相近)的词标绿,漏写/写错的标红下划线
+  const userWords = normTmpl(tmplInput).split(' ').filter(Boolean);
   const diffWords = cur.en.split(/\s+/).map((w, i) => {
     const nw = w.toLowerCase().replace(/[^a-z]/g, '');
     if (nw === '') return h('span', { key: 'dw' + i, style: { color: MUTED } }, ' ____ ');
-    const hit = userSet.has(nw);
+    const hit = userWords.some(uw => fuzzyEq(uw, nw));
     return h('span', { key: 'dw' + i, style: {
       color: hit ? GREEN : RED, fontWeight: '700',
       textDecoration: hit ? 'none' : 'underline', textDecorationStyle: 'wavy', marginRight: '5px'
     } }, w);
   });
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文模板默写', sub: `已背 ${done} / ${ESSAY_TEMPLATES.length} · 第 ${tmplIdx + 1} 张`, setScreen }),
+    SubBar({ title: '作文模板默写', sub: `已背 ${done} / ${ESSAY_TEMPLATES.length} · 第 ${tmplIdx + 1} 张`, setScreen, favId: 'templates#' + tmplIdx, fav }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
       h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '12px' } },
@@ -1243,48 +1382,98 @@ function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tm
 }
 
 /* ============================================================
-   模式⑥:作文构思(议论文骨架排序)
+   模式⑥:作文构思(自己写思路 → 对照范例骨架)
    ============================================================ */
-function Outline({ oCur, oIndex, oShuffle, oPicked, oShowWrong, oPick, oUndo, oRetry, oNext, setScreen, fx }) {
-  const pickedSet = new Set(oPicked);
-  const firstWrong = oShowWrong ? oPicked.findIndex((p, idx) => oShuffle[p].oi !== idx) : -1;
+function Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav }) {
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文构思', sub: `第 ${oIndex + 1} / ${ESSAY_OUTLINES.length} · 骨架排序`, setScreen }),
-    h('div', { style: { padding: '18px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
+    SubBar({ title: '作文构思', sub: `第 ${oIndex + 1} / ${ESSAY_OUTLINES.length}`, setScreen, favId: 'outline#' + oIndex, fav }),
+    h('div', { className: fx === 'correct' ? 'fx-correct' : '',
+      style: { padding: '18px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
       h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '作文题目'),
-      h('div', { style: { fontSize: '19px', color: INK, fontWeight: '700' } }, oCur.topic),
-      h('div', { style: { fontSize: '12px', color: MUTED, marginTop: '8px' } }, '按写作逻辑顺序点击下方提纲(引入 → 论证 → 结论)')
+      h('div', { style: { fontSize: '19px', color: INK, fontWeight: '700', marginBottom: '12px' } }, oCur.topic),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '8px' } }, '先自己列出 3–4 点写作思路(引入 → 论证 → 结论),再对照范例'),
+      h('textarea', { key: 'oinput', value: oInput, readonly: oRevealed,
+        oninput: (e) => setOInput(e.target.value),
+        placeholder: '1. 引入…\n2. …\n3. …\n4. 结论…',
+        style: {
+          width: '100%', minHeight: '120px', padding: '12px 14px', borderRadius: '12px',
+          border: BORDER, background: oRevealed ? 'rgba(124,58,237,0.04)' : '#fff',
+          color: INK, fontSize: '15px', lineHeight: 1.7, resize: 'vertical', outline: 'none', fontFamily: 'inherit'
+        } })
     ),
-    // 答题区(已排序)
-    h('div', { key: 'oans', className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
-      style: { minHeight: '60px', padding: '12px', borderRadius: '14px',
-        border: oShowWrong ? '1px solid rgba(220,38,38,0.5)' : BORDER,
-        background: 'rgba(124,58,237,0.04)', marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px' } },
-      oPicked.length === 0
-        ? h('span', { style: { color: MUTED, fontSize: '14px' } }, '点下方提纲按顺序排列,点最后一项可撤回')
-        : oPicked.map((p, idx) =>
-            h('button', { key: 'op' + idx, onClick: () => idx === oPicked.length - 1 && oUndo(),
-              style: { textAlign: 'left', padding: '11px 13px', borderRadius: '10px', fontSize: '15px', fontWeight: '600',
-                border: idx === firstWrong ? '1px solid ' + RED : '1px solid rgba(124,58,237,0.4)',
-                background: idx === firstWrong ? 'rgba(220,38,38,0.1)' : 'rgba(124,58,237,0.1)',
-                color: idx === firstWrong ? RED : DEEP } }, (idx + 1) + '. ' + oShuffle[p].w))
+    // 范例骨架(对照)
+    oRevealed && h('div', { key: 'omodel', style: {
+        padding: '16px', borderRadius: '14px', marginBottom: '14px', animation: 'riseIn .25s ease-out',
+        background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.3)' } },
+      h('div', { style: { fontSize: '13px', color: DEEP, fontWeight: '800', marginBottom: '8px' } }, '📐 范例骨架(议论文常用结构)'),
+      ...oCur.steps.map((s, i) => h('div', { key: 'os' + i, style: {
+          fontSize: '15px', color: INK, lineHeight: 1.9, padding: '4px 0' } }, (i + 1) + '. ' + s)),
+      h('div', { style: { fontSize: '12px', color: MUTED, marginTop: '8px' } }, '对照你的思路,看是否覆盖了「引入—正反/递进论证—结论」各环节。')
     ),
-    oShowWrong && h('div', { key: 'owrong', style: {
-        padding: '14px', borderRadius: '14px', marginBottom: '14px',
-        background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.3)' } },
-      h('div', { style: { fontSize: '13px', color: RED, fontWeight: '800', marginBottom: '8px' } }, '✗ 逻辑顺序有误'),
-      h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '正确骨架(议论文常用结构)'),
-      ...oCur.steps.map((s, i) => h('div', { key: 'os' + i, style: { fontSize: '14px', color: INK, lineHeight: 1.8 } }, (i + 1) + '. ' + s)),
-      h('div', { style: { display: 'flex', gap: '10px', marginTop: '12px' } },
-        h('button', { onClick: oRetry, style: smallBtn(false) }, '↺ 再排一次'),
-        h('button', { onClick: oNext, style: smallBtn(true) }, '下一题 →'))
-    ),
-    h('div', { key: 'opool', style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-      oShuffle.map((blk, pos) =>
-        pickedSet.has(pos) ? null :
-        h('button', { key: 'ob' + pos, onClick: () => oPick(pos),
-          style: { textAlign: 'left', padding: '14px', borderRadius: '12px', fontSize: '15px', fontWeight: '600',
-            border: BORDER, background: PANEL, color: DEEP, boxShadow: SHADOW, opacity: oShowWrong ? 0.5 : 1 } }, blk.w)
+    h('div', { key: 'obtns', style: { display: 'flex', gap: '12px' } },
+      !oRevealed && h('button', { onClick: oReveal, disabled: !oInput.trim(),
+        style: { ...bigBtn(true), opacity: oInput.trim() ? 1 : 0.5 } }, '📐 对照范例骨架'),
+      oRevealed && h('button', { onClick: oRetry, style: bigBtn(false) }, '↺ 重写'),
+      oRevealed && h('button', { onClick: oNext, style: bigBtn(true) }, '下一题 →')
+    )
+  );
+}
+
+/* ============================================================
+   我的收藏
+   ============================================================ */
+function favLabel(mode, idx) {
+  if (mode === 'translate' && TRANSLATIONS[idx]) return { tag: '翻译', text: TRANSLATIONS[idx].zh };
+  if (mode === 'pattern' && PATTERNS[idx]) return { tag: '句式', text: PATTERNS[idx].full };
+  if (mode === 'collocation' && COLLOCATIONS[idx]) return { tag: '搭配', text: COLLOCATIONS[idx].q.replace('___', '___') + ' — ' + COLLOCATIONS[idx].cn };
+  if (mode === 'templates' && ESSAY_TEMPLATES[idx]) return { tag: '模板', text: ESSAY_TEMPLATES[idx].zh + '  →  ' + ESSAY_TEMPLATES[idx].en };
+  if (mode === 'outline' && ESSAY_OUTLINES[idx]) return { tag: '构思', text: ESSAY_OUTLINES[idx].topic };
+  return { tag: '?', text: '(已失效)' };
+}
+function Favorites({ favs, toggleFav, gotoFav, setScreen }) {
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title: '我的收藏', sub: `${favs.length} 条 · 已本地保存`, setScreen }),
+    favs.length === 0
+      ? h('div', { style: { textAlign: 'center', padding: '46px 20px', color: MUTED, fontSize: '14px', lineHeight: 1.9 } },
+          '还没有收藏~\n在任意题目右上角点「☆ 收藏」即可加入,刷新或重开浏览器都不会丢。')
+      : h('div', null, favs.map((id) => {
+          const sp = id.split('#'); const mode = sp[0]; const idx = +sp[1];
+          const info = favLabel(mode, idx);
+          return h('div', { key: id, style: { padding: '14px', borderRadius: '14px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '12px' } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
+              h('span', { style: { fontSize: '11px', fontWeight: '800', color: PURPLE, background: 'rgba(124,58,237,0.1)', padding: '3px 9px', borderRadius: '999px' } }, info.tag),
+              h('button', { onClick: () => toggleFav(id), style: { border: 'none', background: 'transparent', color: MUTED, fontSize: '13px', fontWeight: '700' } }, '✕ 取消')),
+            h('div', { style: { fontSize: '14px', color: INK, lineHeight: 1.6, marginBottom: '10px' } }, info.text),
+            info.tag !== '?' && h('button', { onClick: () => gotoFav(mode, idx), style: smallBtn(true) }, '去练习 →')
+          );
+        }))
+  );
+}
+
+/* ============================================================
+   查词弹窗(右键 / 长按取词)
+   ============================================================ */
+function WordPopup({ dictWord, dictPos, dictData, close }) {
+  const gloss = GLOSS[dictWord.toLowerCase()];
+  const vw = (window.innerWidth || 360), vh = (window.innerHeight || 640);
+  const left = Math.min(Math.max(dictPos.x, 120), vw - 16);
+  const top = Math.min(dictPos.y + 16, vh - 16);
+  return h('div', { key: 'dict' },
+    h('div', { onClick: close, style: { position: 'fixed', inset: 0, zIndex: 80 } }),
+    h('div', { style: {
+        position: 'fixed', left: left + 'px', top: top + 'px', transform: 'translateX(-50%)', zIndex: 81,
+        maxWidth: '280px', minWidth: '190px', padding: '14px 16px', borderRadius: '14px',
+        background: '#fff', border: '1px solid rgba(124,58,237,0.3)', boxShadow: '0 10px 32px rgba(60,30,120,0.28)' } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } },
+        h('span', { style: { fontSize: '19px', fontWeight: '800', color: DEEP } }, dictWord),
+        h('button', { onClick: close, style: { border: 'none', background: 'transparent', color: MUTED, fontSize: '16px' } }, '✕')),
+      gloss && h('div', { style: { fontSize: '15px', color: INK, fontWeight: '600', marginBottom: '6px' } }, gloss),
+      dictData === null && h('div', { style: { fontSize: '12px', color: MUTED } }, '联网查询中…'),
+      dictData === 'error' && !gloss && h('div', { style: { fontSize: '12px', color: MUTED } }, '离线或未收录,暂无释义'),
+      dictData && dictData !== 'error' && h('div', null,
+        dictData.phonetic && h('div', { style: { fontSize: '13px', color: PURPLE, marginBottom: '4px' } }, dictData.phonetic),
+        ...dictData.defs.map((d, i) => h('div', { key: 'd' + i, style: { fontSize: '12px', color: INK, lineHeight: 1.5, marginTop: '4px' } },
+          h('span', { style: { color: MUTED } }, (d.pos ? d.pos + '. ' : '')), d.def))
       )
     )
   );
