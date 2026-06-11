@@ -680,6 +680,14 @@ function App() {
   const [wtInput, setWtInput] = useState('');
   const [wtChecked, setWtChecked] = useState(false);
 
+  // —— 做题进度:已做过的题永久记录(localStorage,可重置),做过的不再出现
+  const [done, setDone] = useState(() => { try { return JSON.parse(localStorage.getItem('cet6_done') || '{}'); } catch (e) { return {}; } });
+  const [tComplete, setTComplete] = useState(false);
+  const [pComplete, setPComplete] = useState(false);
+  const [colComplete, setColComplete] = useState(false);
+  const [tmplComplete, setTmplComplete] = useState(false);
+  const [oComplete, setOComplete] = useState(false);
+
   // —— 查词弹窗
   const [dictWord, setDictWord] = useState(null);
   const [dictPos, setDictPos] = useState({ x: 0, y: 0 });
@@ -710,14 +718,34 @@ function App() {
     setWordFavs(f => { const n = f.includes(t) ? f.filter(x => x !== t) : [...f, t]; try { localStorage.setItem('cet6_wordfavs', JSON.stringify(n)); } catch (e) {} return n; });
   }
   function gotoFav(mode, idx) {
-    if (mode === 'translate') { setTIndex(idx); setTHist([idx]); setTHp(0); setTPicked([]); setTShowWrong(false); setTRight(false); setTShuffle(makeShuffle(idx)); }
-    else if (mode === 'pattern') { setPIndex(idx); setPHist([idx]); setPHp(0); setPChosen(null); }
-    else if (mode === 'collocation') { setColIndex(idx); setColHist([idx]); setColHp(0); setColChosen(null); }
-    else if (mode === 'templates') { setTmplIdx(idx); setTmplHist([idx]); setTmplHp(0); setTmplInput(''); setTmplChecked(false); }
-    else if (mode === 'outline') { setOIndex(idx); setOHist([idx]); setOHp(0); setOInput(''); setORevealed(false); }
+    if (mode === 'translate') { setTIndex(idx); setTHist([idx]); setTHp(0); setTPicked([]); setTShowWrong(false); setTRight(false); setTComplete(false); setTShuffle(makeShuffle(idx)); }
+    else if (mode === 'pattern') { setPIndex(idx); setPHist([idx]); setPHp(0); setPChosen(null); setPComplete(false); }
+    else if (mode === 'collocation') { setColIndex(idx); setColHist([idx]); setColHp(0); setColChosen(null); setColComplete(false); }
+    else if (mode === 'templates') { setTmplIdx(idx); setTmplHist([idx]); setTmplHp(0); setTmplInput(''); setTmplChecked(false); setTmplComplete(false); }
+    else if (mode === 'outline') { setOIndex(idx); setOHist([idx]); setOHp(0); setOInput(''); setORevealed(false); setOComplete(false); }
     setScreen(mode);
   }
   function enterFavorites() { setScreen('favorites'); }
+
+  /* —— 做题进度:已做记录 / 取未做题 —— */
+  function doneCount(mode) { return (done[mode] || []).length; }
+  function markDone(mode, idx) {
+    setDone(d => { const arr = d[mode] || []; if (arr.indexOf(idx) >= 0) return d; const nd = Object.assign({}, d, { [mode]: arr.concat([idx]) }); try { localStorage.setItem('cet6_done', JSON.stringify(nd)); } catch (e) {} return nd; });
+  }
+  function resetDoneMode(mode) {
+    setDone(d => { const nd = Object.assign({}, d, { [mode]: [] }); try { localStorage.setItem('cet6_done', JSON.stringify(nd)); } catch (e) {} return nd; });
+  }
+  function pickUndone(mode, N, exclude) {
+    const dn = done[mode] || [], pool = [];
+    for (let i = 0; i < N; i++) { if (i !== exclude && dn.indexOf(i) < 0) pool.push(i); }
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : -1;
+  }
+  // 历史前进:有前进记录则沿用(回看),否则取一道未做过的新题;都做完返回 null
+  function nextUndone(hist, hp, mode, N) {
+    if (hp < hist.length - 1) return { idx: hist[hp + 1], hist: hist, hp: hp + 1 };
+    const idx = pickUndone(mode, N, hist[hp]);
+    return idx < 0 ? null : { idx: idx, hist: hist.concat([idx]), hp: hp + 1 };
+  }
 
   /* —— 生词测试逻辑 —— */
   function enterWordTest() {
@@ -758,20 +786,24 @@ function App() {
   }
 
   /* —— 进入各模式 —— */
-  function tLoad(ni) { setTIndex(ni); setTShuffle(makeShuffle(ni)); setTPicked([]); setTShowWrong(false); setTRight(false); }
+  function tLoad(ni) { setTIndex(ni); setTShuffle(makeShuffle(ni)); setTPicked([]); setTShowWrong(false); setTRight(false); setTComplete(false); }
   function enterTranslate() {
-    const ni = rnd(TRANSLATIONS.length);
-    setScreen('translate'); setTHist([ni]); setTHp(0); tLoad(ni);
+    setScreen('translate'); const ni = pickUndone('translate', TRANSLATIONS.length);
+    setTHist([ni < 0 ? 0 : ni]); setTHp(0); tLoad(ni < 0 ? 0 : ni); if (ni < 0) setTComplete(true);
   }
   function prevSentence() { if (tHp > 0) { setTHp(tHp - 1); tLoad(tHist[tHp - 1]); } }
-  function enterPattern() { const ni = rnd(PATTERNS.length); setScreen('pattern'); setPHist([ni]); setPHp(0); setPIndex(ni); setPChosen(null); }
-  function prevPattern() { if (pHp > 0) { setPHp(pHp - 1); setPIndex(pHist[pHp - 1]); setPChosen(null); } }
+  function resetTranslate() { resetDoneMode('translate'); const ni = rnd(TRANSLATIONS.length); setTHist([ni]); setTHp(0); tLoad(ni); }
+  function enterPattern() { setScreen('pattern'); const ni = pickUndone('pattern', PATTERNS.length); const idx = ni < 0 ? 0 : ni; setPHist([idx]); setPHp(0); setPIndex(idx); setPChosen(null); setPComplete(ni < 0); }
+  function prevPattern() { if (pHp > 0) { setPHp(pHp - 1); setPIndex(pHist[pHp - 1]); setPChosen(null); setPComplete(false); } }
+  function resetPattern() { resetDoneMode('pattern'); const ni = rnd(PATTERNS.length); setPHist([ni]); setPHp(0); setPIndex(ni); setPChosen(null); setPComplete(false); }
   function enterSynonym() { setScreen('synonym'); newBatch(rnd(SYNONYM_BATCHES.length)); }
 
   /* —— 翻译逻辑(按单词文本判对 → 两个相同的词换序也算对) —— */
   const tCur = TRANSLATIONS[tIndex];
   function nextSentence() {
-    const r = histForward(tHist, tHp, TRANSLATIONS.length);
+    markDone('translate', tIndex);
+    const r = nextUndone(tHist, tHp, 'translate', TRANSLATIONS.length);
+    if (!r) { setTComplete(true); return; }
     setTHist(r.hist); setTHp(r.hp); tLoad(r.idx);
   }
   function retryTranslate() { setTShowWrong(false); setTPicked([]); }
@@ -794,7 +826,9 @@ function App() {
   /* —— 句式逻辑 —— */
   const pCur = PATTERNS[pIndex];
   function nextPattern() {
-    const r = histForward(pHist, pHp, PATTERNS.length);
+    markDone('pattern', pIndex);
+    const r = nextUndone(pHist, pHp, 'pattern', PATTERNS.length);
+    if (!r) { setPComplete(true); return; }
     setPHist(r.hist); setPHp(r.hp); setPIndex(r.idx); setPChosen(null);
   }
   function chooseOption(opt) {
@@ -842,11 +876,14 @@ function App() {
   }
 
   /* —— 固定搭配逻辑 —— */
-  function enterCollocation() { const ni = rnd(COLLOCATIONS.length); setScreen('collocation'); setColHist([ni]); setColHp(0); setColIndex(ni); setColChosen(null); }
-  function prevCol() { if (colHp > 0) { setColHp(colHp - 1); setColIndex(colHist[colHp - 1]); setColChosen(null); } }
+  function enterCollocation() { setScreen('collocation'); const ni = pickUndone('collocation', COLLOCATIONS.length); const idx = ni < 0 ? 0 : ni; setColHist([idx]); setColHp(0); setColIndex(idx); setColChosen(null); setColComplete(ni < 0); }
+  function prevCol() { if (colHp > 0) { setColHp(colHp - 1); setColIndex(colHist[colHp - 1]); setColChosen(null); setColComplete(false); } }
+  function resetCol() { resetDoneMode('collocation'); const ni = rnd(COLLOCATIONS.length); setColHist([ni]); setColHp(0); setColIndex(ni); setColChosen(null); setColComplete(false); }
   const colCur = COLLOCATIONS[colIndex];
   function colNext() {
-    const r = histForward(colHist, colHp, COLLOCATIONS.length);
+    markDone('collocation', colIndex);
+    const r = nextUndone(colHist, colHp, 'collocation', COLLOCATIONS.length);
+    if (!r) { setColComplete(true); return; }
     setColHist(r.hist); setColHp(r.hp); setColIndex(r.idx); setColChosen(null);
   }
   function colChoose(opt) {
@@ -857,9 +894,10 @@ function App() {
   }
 
   /* —— 作文模板逻辑(默写检查) —— */
-  function enterTemplates() { const ni = rnd(ESSAY_TEMPLATES.length); setScreen('templates'); setTmplHist([ni]); setTmplHp(0); setTmplIdx(ni); setTmplInput(''); setTmplChecked(false); }
-  function tmplGoNext() { const r = histForward(tmplHist, tmplHp, ESSAY_TEMPLATES.length); setTmplHist(r.hist); setTmplHp(r.hp); setTmplIdx(r.idx); setTmplInput(''); setTmplChecked(false); }
-  function tmplPrev() { if (tmplHp > 0) { setTmplHp(tmplHp - 1); setTmplIdx(tmplHist[tmplHp - 1]); setTmplInput(''); setTmplChecked(false); } }
+  function enterTemplates() { setScreen('templates'); const ni = pickUndone('templates', ESSAY_TEMPLATES.length); const idx = ni < 0 ? 0 : ni; setTmplHist([idx]); setTmplHp(0); setTmplIdx(idx); setTmplInput(''); setTmplChecked(false); setTmplComplete(ni < 0); }
+  function tmplGoNext() { markDone('templates', tmplIdx); const r = nextUndone(tmplHist, tmplHp, 'templates', ESSAY_TEMPLATES.length); if (!r) { setTmplComplete(true); return; } setTmplHist(r.hist); setTmplHp(r.hp); setTmplIdx(r.idx); setTmplInput(''); setTmplChecked(false); }
+  function tmplPrev() { if (tmplHp > 0) { setTmplHp(tmplHp - 1); setTmplIdx(tmplHist[tmplHp - 1]); setTmplInput(''); setTmplChecked(false); setTmplComplete(false); } }
+  function resetTmpl() { resetDoneMode('templates'); const ni = rnd(ESSAY_TEMPLATES.length); setTmplHist([ni]); setTmplHp(0); setTmplIdx(ni); setTmplInput(''); setTmplChecked(false); setTmplComplete(false); }
   function tmplCheck() {
     if (!tmplInput.trim()) return;
     setTmplChecked(true);
@@ -874,10 +912,11 @@ function App() {
   }
 
   /* —— 作文构思逻辑(自己写思路 → 对照范例骨架) —— */
-  function enterOutline() { const ni = rnd(ESSAY_OUTLINES.length); setScreen('outline'); setOHist([ni]); setOHp(0); setOIndex(ni); setOInput(''); setORevealed(false); }
-  function oPrev() { if (oHp > 0) { setOHp(oHp - 1); setOIndex(oHist[oHp - 1]); setOInput(''); setORevealed(false); } }
+  function enterOutline() { setScreen('outline'); const ni = pickUndone('outline', ESSAY_OUTLINES.length); const idx = ni < 0 ? 0 : ni; setOHist([idx]); setOHp(0); setOIndex(idx); setOInput(''); setORevealed(false); setOComplete(ni < 0); }
+  function oPrev() { if (oHp > 0) { setOHp(oHp - 1); setOIndex(oHist[oHp - 1]); setOInput(''); setORevealed(false); setOComplete(false); } }
+  function resetOutline() { resetDoneMode('outline'); const ni = rnd(ESSAY_OUTLINES.length); setOHist([ni]); setOHp(0); setOIndex(ni); setOInput(''); setORevealed(false); setOComplete(false); }
   const oCur = ESSAY_OUTLINES[oIndex];
-  function oNext() { const r = histForward(oHist, oHp, ESSAY_OUTLINES.length); setOHist(r.hist); setOHp(r.hp); setOIndex(r.idx); setOInput(''); setORevealed(false); }
+  function oNext() { markDone('outline', oIndex); const r = nextUndone(oHist, oHp, 'outline', ESSAY_OUTLINES.length); if (!r) { setOComplete(true); return; } setOHist(r.hist); setOHp(r.hp); setOIndex(r.idx); setOInput(''); setORevealed(false); }
   function oReveal() { if (oRevealed) return; setORevealed(true); correctFlow(); }
   function oRetry() { setORevealed(false); setOInput(''); }
 
@@ -897,12 +936,12 @@ function App() {
     // 屏幕层:key 随模式变化 → 仅切换模式时重建(播放入场动画),屏幕内操作只做增量更新
     h('div', { key: 'screen-' + screen },
       screen === 'menu' && Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, enterTemplates, enterOutline, enterFavorites, enterWordTest, pLit, tmplDone, favs, wordFavs }),
-      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, pos: tHp + 1, onPrev: prevSentence, canPrev: tHp > 0 }),
-      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, pos: pHp + 1, onPrev: prevPattern, canPrev: pHp > 0 }),
+      screen === 'translate' && Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, onPrev: prevSentence, canPrev: tHp > 0, doneN: doneCount('translate'), totalN: TRANSLATIONS.length, complete: tComplete, onReset: resetTranslate }),
+      screen === 'pattern' && Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, onPrev: prevPattern, canPrev: pHp > 0, doneN: doneCount('pattern'), totalN: PATTERNS.length, complete: pComplete, onReset: resetPattern }),
       screen === 'synonym' && Synonym({ sWords, sOrder, sMatched, sSel, sWrongPair, sDone, sElapsed, sBatch, sHint, tapCard, newBatch, setScreen, fx }),
-      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, pos: colHp + 1, onPrev: prevCol, canPrev: colHp > 0 }),
-      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, pos: tmplHp + 1, onPrev: tmplPrev, canPrev: tmplHp > 0 }),
-      screen === 'outline' && Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, pos: oHp + 1, onPrev: oPrev, canPrev: oHp > 0 }),
+      screen === 'collocation' && Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, onPrev: prevCol, canPrev: colHp > 0, doneN: doneCount('collocation'), totalN: COLLOCATIONS.length, complete: colComplete, onReset: resetCol }),
+      screen === 'templates' && Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, onPrev: tmplPrev, canPrev: tmplHp > 0, doneN: doneCount('templates'), totalN: ESSAY_TEMPLATES.length, complete: tmplComplete, onReset: resetTmpl }),
+      screen === 'outline' && Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, onPrev: oPrev, canPrev: oHp > 0, doneN: doneCount('outline'), totalN: ESSAY_OUTLINES.length, complete: oComplete, onReset: resetOutline }),
       screen === 'favorites' && Favorites({ favs, wordFavs, toggleFav, toggleWordFav, gotoFav, setScreen, onTestWords: enterWordTest }),
       screen === 'wordtest' && WordTest({ wordFavs, wtIdx, wtInput, wtChecked, setWtInput, wtCheck, wtRetry, wtNext, setScreen, fx, pos: wtHp + 1, onPrev: wtPrev, canPrev: wtHp > 0 })
     )
@@ -1068,12 +1107,13 @@ function Menu({ enterTranslate, enterPattern, enterSynonym, enterCollocation, en
 /* ============================================================
    模式①:翻译速拼
    ============================================================ */
-function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, pos, onPrev, canPrev }) {
+function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBlock, undoBlock, retryTranslate, nextSentence, setScreen, fx, fav, onPrev, canPrev, doneN, totalN, complete, onReset }) {
+  if (complete) return CompleteView({ title: '翻译速拼', totalN, onReset, setScreen });
   const pickedSet = new Set(tPicked);
   // 第一个语序错误位置:按单词文本比较(相同的词换序不算错)
   const firstWrong = tShowWrong ? tPicked.findIndex((p, idx) => tShuffle[p].w !== tCur.tokens[idx]) : -1;
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '翻译速拼', sub: `本次第 ${pos} 题`, setScreen, favId: 'translate#' + tIndex, fav, onPrev, canPrev }),
+    SubBar({ title: '翻译速拼', sub: `已做 ${doneN} / 共 ${totalN}`, setScreen, favId: 'translate#' + tIndex, fav, onPrev, canPrev, onReset }),
     h('div', { style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '16px', boxShadow: SHADOW } },
       h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '8px' } }, '中文'),
       h('div', { style: { fontSize: '20px', lineHeight: 1.7, color: INK, fontWeight: '600' } }, tCur.zh)
@@ -1141,12 +1181,13 @@ function Translate({ tCur, tIndex, tShuffle, tPicked, tShowWrong, tRight, pickBl
 /* ============================================================
    模式②:句式点亮
    ============================================================ */
-function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, pos, onPrev, canPrev }) {
+function Pattern({ pCur, pIndex, pLit, pChosen, chooseOption, nextPattern, setScreen, fx, fav, onPrev, canPrev, doneN, totalN, complete, onReset }) {
+  if (complete) return CompleteView({ title: '句式点亮', totalN, onReset, setScreen });
   const correct = pChosen && pChosen === pCur.answer;
   const wrong = pChosen && pChosen !== pCur.answer;
   const litExamples = PATTERNS.filter((_, i) => pLit[i]);
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '句式点亮', sub: `本次第 ${pos} 题 · 已点亮 ${pLit.filter(Boolean).length}/${PATTERNS.length}`, setScreen, favId: 'pattern#' + pIndex, fav, onPrev, canPrev }),
+    SubBar({ title: '句式点亮', sub: `已做 ${doneN} / 共 ${totalN}`, setScreen, favId: 'pattern#' + pIndex, fav, onPrev, canPrev, onReset }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, marginBottom: '14px', boxShadow: SHADOW } },
       h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '10px', letterSpacing: '1px' } }, pCur.name),
@@ -1299,20 +1340,38 @@ function smallBtn(primary) {
 }
 
 /* ============================================================
+   全部做完
+   ============================================================ */
+function CompleteView({ title, totalN, onReset, setScreen }) {
+  return h('div', { style: { animation: 'riseIn .35s ease-out' } },
+    SubBar({ title, sub: `已做 ${totalN} / 共 ${totalN} · 全部完成`, setScreen }),
+    h('div', { style: { textAlign: 'center', padding: '44px 22px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW } },
+      h('div', { style: { fontSize: '44px', marginBottom: '12px' } }, '🎉'),
+      h('div', { style: { fontSize: '18px', fontWeight: '800', color: DEEP, marginBottom: '10px' } }, `这个模块 ${totalN} 道题已全部做完!`),
+      h('div', { style: { fontSize: '13px', color: MUTED, marginBottom: '22px', lineHeight: 1.7 } }, '做过的题不会再出现。想再刷一遍可以重置进度,重新开始。'),
+      h('button', { onClick: onReset, style: bigBtn(true) }, '↺ 重置进度,重新开始')
+    )
+  );
+}
+
+/* ============================================================
    子页头(标题 + 返回)
    ============================================================ */
-function SubBar({ title, sub, setScreen, favId, fav, onPrev, canPrev }) {
+function SubBar({ title, sub, setScreen, favId, fav, onPrev, canPrev, onReset }) {
   const isFav = fav && favId && fav.favs.includes(favId);
   return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '4px 0 18px' } },
     h('div', null,
       h('div', { style: { fontSize: '22px', fontWeight: '900', color: DEEP } }, title),
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' } },
         h('span', { style: { fontSize: '12px', color: MUTED } }, sub),
         onPrev && h('button', { onClick: () => canPrev && onPrev(),
           style: { padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
             border: '1px solid ' + (canPrev ? 'rgba(124,58,237,0.4)' : 'rgba(139,127,176,0.25)'),
             background: canPrev ? 'rgba(124,58,237,0.08)' : 'transparent',
-            color: canPrev ? PURPLE : '#c9bce6' } }, '‹ 上一题')
+            color: canPrev ? PURPLE : '#c9bce6' } }, '‹ 上一题'),
+        onReset && h('button', { onClick: onReset,
+          style: { padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
+            border: '1px solid rgba(139,127,176,0.3)', background: 'transparent', color: MUTED } }, '↺ 重置')
       )
     ),
     h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
@@ -1382,12 +1441,13 @@ function EdgeGlow({ strong }) {
 /* ============================================================
    模式④:固定搭配(快闪选择)
    ============================================================ */
-function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, pos, onPrev, canPrev }) {
+function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScreen, fx, fav, onPrev, canPrev, doneN, totalN, complete, onReset }) {
+  if (complete) return CompleteView({ title: '固定搭配', totalN, onReset, setScreen });
   const correct = colChosen && colChosen === colCur.answer;
   const wrong = colChosen && colChosen !== colCur.answer;
   const parts = colCur.q.split('___');
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '固定搭配', sub: `本次第 ${pos} 题`, setScreen, favId: 'collocation#' + colIndex, fav, onPrev, canPrev }),
+    SubBar({ title: '固定搭配', sub: `已做 ${doneN} / 共 ${totalN}`, setScreen, favId: 'collocation#' + colIndex, fav, onPrev, canPrev, onReset }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '28px 20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '16px', textAlign: 'center' } },
       h('div', { style: { fontSize: '13px', color: MUTED, marginBottom: '14px' } }, colCur.cn),
@@ -1432,7 +1492,8 @@ function Collocation({ colCur, colIndex, colChosen, colChoose, colNext, setScree
 /* ============================================================
    模式⑤:作文模板(默写检查)
    ============================================================ */
-function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, pos, onPrev, canPrev }) {
+function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tmplCheck, tmplRetry, tmplMark, tmplGoNext, setScreen, fx, fav, onPrev, canPrev, doneN, totalN, complete, onReset }) {
+  if (complete) return CompleteView({ title: '作文模板默写', totalN, onReset, setScreen });
   const cur = ESSAY_TEMPLATES[tmplIdx];
   const done = tmplDone.filter(Boolean).length;
   const wordCount = cur.en.split(/\s+/).filter(w => !/^\.+$/.test(w)).length;
@@ -1449,7 +1510,7 @@ function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tm
     } }, w);
   });
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文模板默写', sub: `本次第 ${pos} 张 · 已背 ${done}/${ESSAY_TEMPLATES.length}`, setScreen, favId: 'templates#' + tmplIdx, fav, onPrev, canPrev }),
+    SubBar({ title: '作文模板默写', sub: `已做 ${doneN} / 共 ${totalN} · 已背 ${done}`, setScreen, favId: 'templates#' + tmplIdx, fav, onPrev, canPrev, onReset }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : (fx === 'wrong' ? 'fx-wrong' : ''),
       style: { padding: '20px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
       h('div', { style: { fontSize: '12px', color: PURPLE, fontWeight: '700', marginBottom: '12px' } },
@@ -1490,9 +1551,10 @@ function Templates({ tmplIdx, tmplInput, tmplChecked, tmplDone, setTmplInput, tm
 /* ============================================================
    模式⑥:作文构思(自己写思路 → 对照范例骨架)
    ============================================================ */
-function Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, pos, onPrev, canPrev }) {
+function Outline({ oCur, oIndex, oInput, oRevealed, setOInput, oReveal, oRetry, oNext, setScreen, fx, fav, onPrev, canPrev, doneN, totalN, complete, onReset }) {
+  if (complete) return CompleteView({ title: '作文构思', totalN, onReset, setScreen });
   return h('div', { style: { animation: 'riseIn .35s ease-out' } },
-    SubBar({ title: '作文构思', sub: `本次第 ${pos} 题`, setScreen, favId: 'outline#' + oIndex, fav, onPrev, canPrev }),
+    SubBar({ title: '作文构思', sub: `已做 ${doneN} / 共 ${totalN}`, setScreen, favId: 'outline#' + oIndex, fav, onPrev, canPrev, onReset }),
     h('div', { className: fx === 'correct' ? 'fx-correct' : '',
       style: { padding: '18px', borderRadius: '16px', border: BORDER, background: PANEL, boxShadow: SHADOW, marginBottom: '14px' } },
       h('div', { style: { fontSize: '12px', color: MUTED, marginBottom: '6px' } }, '作文题目'),
